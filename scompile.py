@@ -12,28 +12,28 @@ from sobject import w_unspecified, scmlist2py
 class SchemeSyntaxError(Exception):
     pass
 
-def compile_expr_list(expr_list):
+def compile_list_of_expr(expr_list):
     # using default sematics.
-    pass
-
-def w_compile(walker, expr_list):
-    flag = CompilationFlag(True)
-
-    last = None
-    for expr in expr_list:
-        last = walker.visit(expr, flag)
-
-    last_value_repr = walker.cast_to_local(last)
-    walker.emit(Return(last_value_repr.to_index()))
+    walker = ClosureWalker()
+    walker.visit_list_of_expr(expr_list)
     return walker.to_closure_skeleton()
 
 # XXX: how to better represent multiple flags?
 class CompilationFlag(object):
-    def __init__(self, is_tailcall=False):
-        self.is_tailcall = is_tailcall
+    TCO = 0x1
+    FOO = 0x2
+    BAR = 0x4
+    WTF = 0x8
+
+    def __init__(self, flags=0x0):
+        self.flags = flags
 
     def copy(self):
-        return CompilationFlag(self.is_tailcall)
+        return CompilationFlag(self.flags)
+
+    def has_tco(self):
+        return self.flags & self.TCO
+
 
 class Walker(object):
     def visit(self, thing, flag=None):
@@ -47,19 +47,32 @@ class ClosureWalker(Walker):
         self.local_consts = []
         self.consts_map = {} # maps consts to its id
         self.local_cellvalues = [] # list of packed ints, @see sdo.ClosSkel 
-        self.local_skeletons = []
         self.local_variables = {} # frame variable and opened cellvalues
         self.nargs = 0
         self.hasvarargs = False
+        if outer_closure:
+            self.closkel_table = outer_closure.closkel_table
+        else:
+            self.closkel_table = []
 
         self.outer_closure = outer_closure
         self.deferred_lambdas = []
 
     def to_closure_skeleton(self):
         from sdo import W_ClosureSkeleton
-        return W_ClosureSkeleton(self.instructions, self.local_consts,
-                self.framesize, self.local_cellvalues, self.nargs,
-                self.hasvarargs)
+
+        for dfd_lambda in self.deferred_lambdas:
+            dfd_lambda.resume_compilation()
+        self.deferred_lambdas = []
+
+        if self.outer_closure: # is not toplevel
+            return W_ClosureSkeleton(self.instructions, self.local_consts,
+                    self.framesize, self.local_cellvalues, self.nargs,
+                    self.hasvarargs, None)
+        else: # toplevel -- should pass its closure skeleton table
+            return W_ClosureSkeleton(self.instructions, self.local_consts,
+                    self.framesize, self.local_cellvalues, self.nargs,
+                    self.hasvarargs, self.closkel_table)
 
     def new_frame_slot(self):
         res = self.framesize
@@ -74,32 +87,28 @@ class ClosureWalker(Walker):
             self.local_consts.append(w_obj)
         return consts_id
 
+    def new_skel_slot(self, w_skel):
+        self.closkel_table.append(w_skel)
+        return len(self.closkel_table) - 1
+
     def emit(self, instr):
         assert isinstance(instr, Instr)
         self.instructions.append(instr)
 
-    def visit_toplevel(self, w_exprlist, flag):
+    def visit_list_of_expr(self, w_exprlist):
+        """ Visit a list of expression, compile them to a closure skeleton with
+            no cellvalues, and append a return statement to the instructions
+            generated. After then, to_closure_skeleton() will do the rest work.
+        """
+        tco_flag = CompilationFlag(CompilationFlag.TCO)
         last_value_repr = None
-        for w_expr in w_exprlist:
-            last_value_repr = self.visit(w_expr, flag)
-
-        for dfd_lambda in self.deferred_lambdas:
-            dfd_lambda.resume_compilation()
-        return last_value_repr
-
-    def visit_exprlist_with_tco(self, w_exprlist, flag):
-        last_value_repr = None
-        for i, w_expr in enumerate(w_exprlist):
-            if i == len(w_expr) - 1:
-                last_value_repr = self.visit(w_expr, flag)
+        for i in xrange(len(w_exprlist)): # RPython doesn't like enumerate...
+            w_expr = w_exprlist[i]
+            if i == len(w_exprlist) - 1:
+                last_value_repr = self.visit(w_expr, tco_flag)
             else:
                 last_value_repr = self.visit(w_expr)
-
-        for dfd_lambda in self.deferred_lambdas:
-            dfd_lambda.resume_compilation()
-
-        self.emit(Return(self.cast_to_local(last_value_repr)))
-
+        self.emit(Return(self.cast_to_local(last_value_repr).to_index()))
 
     def visit(self, w_object, flag=None):
         if flag is None:
@@ -353,7 +362,7 @@ class ClosureWalker(Walker):
 
         # cal; and return
         result_value_repr = FrameValueRepr(self.new_frame_slot())
-        if flag.is_tailcall:
+        if flag.has_tco():
             self.emit(TailCall(result_value_repr.to_index(),
                     proc_slot.to_index(), len(lst)))
         else:
@@ -512,9 +521,10 @@ class DeferredLambdaCompilation(object):
             lambda_walker.local_variables[w_rest.to_string()] \
                     = frame_slot_repr
 
-        # compile the body.
-        w_lambda_skeleton = w_compile(lambda_walker, lambda_body)
+        # compile the body. XXX: create a global skeleton table like lua?
+        lambda_walker.visit_list_of_expr(lambda_body)
+        w_lambda_skeleton = lambda_walker.to_closure_skeleton()
         self.walker.instructions[self.instrindex] = BuildClosure(
             self.dest_val_repr.to_index(),
-            self.walker.new_const_slot(w_lambda_skeleton))
+            self.walker.new_skel_slot(w_lambda_skeleton))
 

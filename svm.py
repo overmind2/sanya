@@ -3,6 +3,7 @@ from pypy.rlib.jit import JitDriver
 jitdriver = JitDriver(greens=['pc', 'instr'], reds=['vm', 'frame'])
 
 from sdo import W_CellValue, CellValueNode
+from sconf import DEBUG
 
 class HaltException(Exception):
     pass
@@ -54,7 +55,6 @@ class Dump(object):
 
 
 class VM(object):
-
     def __init__(self):
         self.reboot()
 
@@ -74,6 +74,7 @@ class VM(object):
         self.cellval_head = CellValueNode(None, None, None)
         self.cellval_head.nextnode = self.cellval_head
         self.cellval_head.prevnode = self.cellval_head
+        self.closkel_table = []
 
     def new_frame(self, size):
         return Frame(size)
@@ -87,6 +88,8 @@ class VM(object):
         self.pc = 0
         self.consts = w_skel.consts
         self.instrs = w_skel.instrs
+        self.closkel_table = w_skel.closkel_table
+        w_skel.closkel_table = None
 
     def halt(self):
         raise HaltException
@@ -122,15 +125,19 @@ class VM(object):
                 instr = self.instrs[self.pc]
 
                 jitdriver.jit_merge_point(pc=self.pc,
-                        instr=instr, 
+                        instr=instr,
                         vm=self,
                         frame=self.frame)
 
-                print 'instr %s, pc=%d, gl=%s, frame=%s' % (instr, self.pc,
-                        self.globalvars, self.frame)
+                if DEBUG:
+                    print self
+
                 self.pc += 1
                 instr.dispatch(self)
         except HaltException:
             return
 
+    def __repr__(self):
+        """NOT_RPYTHON"""
+        return '<vm pc=%02d instr=%s>' % (self.pc, self.instrs[self.pc])
 

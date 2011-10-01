@@ -11,7 +11,7 @@ class W_ClosureSkeleton(W_Root):
         compiling?
     """
     def __init__(self, instrs, consts, nframeslots, raw_cellvalues,
-            nargs, hasvarargs):
+            nargs, hasvarargs, closkel_table):
         self.instrs = instrs
         self.consts = consts
         self.nframeslots = nframeslots
@@ -22,6 +22,7 @@ class W_ClosureSkeleton(W_Root):
 
         self.nargs = nargs # Actually it's number of positional args...
         self.hasvarargs = hasvarargs
+        self.closkel_table = closkel_table
 
     def is_procedure_skeleton(self):
         return True

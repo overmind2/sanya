@@ -14,13 +14,32 @@
 """
 from sobject import *
 
+OP_TYPE_ABC = 1
+OP_TYPE_ABx = 2
+
 class Instr(object):
+    op_num = -1
+    A = -1
+    B = -1
+    C = -1
+    op_type = OP_TYPE_ABC
+
     def dispatch(self, vm):
         raise NotImplementedError
 
     def __repr__(self):
         """NOT_RPYTHON"""
         return '[instr]'
+
+    def dump_u32(self):
+        if self.op_type == OP_TYPE_ABC:
+            return (self.op_num << (32 - 5) | self.A << (32 - 5 - 9) |
+                    self.B << (32 - 5 - 9 - 9) | self.C)
+        elif self.op_type == OP_TYPE_ABx:
+            return (self.op_num << (32 - 5) | self.A << (32 - 5 - 9) |
+                    self.Bx << (32 - 5 - 9 - 9))
+        else:
+            raise ValueError('unknown op type')
 
 class Halt(Instr):
     def dispatch(self, vm):
@@ -127,7 +146,7 @@ class BuildClosure(Instr):
 
         @see sdo.W_ClosureSkeleton.build_closure()
 
-        rA = build_closure_and_open_cellvalues(kB)
+        rA = build_closure_and_open_cellvalues(closkel_table[B])
     """
     _immutable_fields_ = ['A', 'B']
 
@@ -136,13 +155,13 @@ class BuildClosure(Instr):
         self.B = B
 
     def dispatch(self, vm):
-        w_skel = vm.consts[self.B]
+        w_skel = vm.closkel_table[self.B]
         assert w_skel.is_procedure_skeleton()
         w_proc = w_skel.build_closure(vm)
         vm.frame.set(self.A, w_proc)
 
     def __repr__(self):
-        return '[r(%d) = buildclosure(k(%d))]' % (self.A, self.B)
+        return '[r(%d) = buildclosure(SkelTable[%d])]' % (self.A, self.B)
 
 class Call(Instr):
     """ rA = rB(rB + 1, ..., rB + C)
@@ -185,12 +204,11 @@ class Call(Instr):
         if w_proc.skeleton.nargs < actual_argcount:
             assert(w_proc.skeleton.hasvarargs)
             # vararg is slowish.
-            # XXX: scmlist_to_pylist here
             vararg = pylist2scm([
                 vm.frame.get(index_of_first_arg + i)
                 for i in xrange(actual_argcount)])
         else:
-            vararg = None # make pypy happy
+            vararg = w_nil
 
         # save vm's current state
         vm.save_dump()
@@ -368,4 +386,26 @@ class BranchIfFalse(Instr):
 
 # _________________________________________________________________________
 # application instructions
+
+
+# _________________________________________________________________________
+# opcode numbers map
+op_map = {
+    'Halt':         1,
+    'MoveLocal':    2,
+    'LoadGlobal':   3,
+    'LoadCell':     4,
+    'LoadConst':    5,
+    'StoreGlobal':  6,
+    'StoreCell':    7,
+    'BuildClosure': 8,
+    'Call':         9,
+    'TailCall':     10,
+    'Return':       11,
+    'Branch':       12,
+    'BranchIfFalse': 13
+}
+
+for op_name, op_num in op_map.items():
+    globals()[op_name].op_num = op_num
 

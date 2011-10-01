@@ -20,6 +20,22 @@ class W_AddProc(W_PyProc):
     def to_string(self):
         return '#<primitive-procedure +>'
 
+class W_SubtractProc(W_PyProc):
+    _symbol_name_ = '-'
+
+    def py_call(self, py_args):
+        assert len(py_args) >= 1
+
+        res = py_args[0]
+
+        for w_obj in py_args[1:]:
+            assert w_obj.is_fixnum()
+            res = W_Fixnum(res.ival - w_obj.ival)
+        return res
+
+    def to_string(self):
+        return '#<primitive-procedure ->'
+
 class W_DisplayProc(W_PyProc):
     _symbol_name_ = 'display'
 
