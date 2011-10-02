@@ -17,9 +17,15 @@ def dump_skel(skel, stream):
     dump_instr_list(skel.instrs, stream)
     dump_const_list(skel.consts, stream)
     dump_number(skel.nframeslots, stream)
+
     dump_number(len(skel.raw_cellvalues), stream)
     for cellvalue_repr in skel.raw_cellvalues:
         dump_number(cellvalue_repr, stream)
+
+    dump_number(len(skel.shadow_cellvalues), stream)
+    for shadow_id in skel.shadow_cellvalues:
+        dump_number(shadow_id, stream)
+
     dump_number(skel.nargs, stream)
     if skel.hasvarargs:
         stream.write('\x01')
@@ -105,6 +111,11 @@ def load_skel(stream):
     cellvalues = [-1] * ncellvalues
     for i in xrange(ncellvalues):
         cellvalues[i] = load_number(stream)
+    
+    nshadow_cellvalues = load_number(stream)
+    shadow_cellvalues = [-1] * nshadow_cellvalues
+    for i in xrange(nshadow_cellvalues):
+        shadow_cellvalues[i] = load_number(stream)
 
     nargs = load_number(stream)
     nxt_chr = stream.read(1)
@@ -116,8 +127,8 @@ def load_skel(stream):
         raise ValueError('hasvararg -- not 0/1')
 
     stream.read(1) # the newline
-    return W_ClosureSkeleton(instrs, consts, nframeslots, cellvalues,
-            nargs, hasvarargs, None)
+    return W_ClosureSkeleton(instrs, consts, nframeslots,
+            cellvalues, shadow_cellvalues, nargs, hasvarargs, None)
 
 def load_instr_list(stream):
     ninstrs = load_number(stream)

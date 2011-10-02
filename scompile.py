@@ -49,6 +49,11 @@ class ClosureWalker(Walker):
         self.local_consts = []
         self.consts_map = {} # maps consts to its id
         self.local_cellvalues = [] # list of packed ints, @see sdo.ClosSkel 
+
+        # temporarily maps frame index to shadow_cv's index
+        self.shadow_cellvalue_map = {}
+        self.shadow_cellvalues = [] # list of ints
+
         self.local_variables = {} # frame variable and opened cellvalues
         self.nargs = 0
         self.hasvarargs = False
@@ -69,13 +74,15 @@ class ClosureWalker(Walker):
         self.deferred_lambdas = []
 
         if self.outer_closure: # is not toplevel
-            return W_ClosureSkeleton(self.instructions, self.local_consts,
-                    self.framesize, self.local_cellvalues, self.nargs,
-                    self.hasvarargs, None)
+            return W_ClosureSkeleton(self.instructions,
+                    self.local_consts, self.framesize,
+                    self.local_cellvalues, self.shadow_cellvalues,
+                    self.nargs, self.hasvarargs, None)
         else: # toplevel -- should pass its closure skeleton table
-            return W_ClosureSkeleton(self.instructions, self.local_consts,
-                    self.framesize, self.local_cellvalues, self.nargs,
-                    self.hasvarargs, self.closkel_table)
+            return W_ClosureSkeleton(self.instructions,
+                    self.local_consts, self.framesize,
+                    self.local_cellvalues, self.shadow_cellvalues,
+                    self.nargs, self.hasvarargs, self.closkel_table)
 
     def new_frame_slot(self):
         res = self.framesize
@@ -93,6 +100,11 @@ class ClosureWalker(Walker):
     def new_skel_slot(self, w_skel):
         self.closkel_table.append(w_skel)
         return len(self.closkel_table) - 1
+
+    def new_shadow_from_frameslot(self, frameslot):
+        shadow_slot_id = len(self.shadow_cellvalues)
+        self.shadow_cellvalues.append(frameslot)
+        return shadow_slot_id
 
     def emit(self, instr):
         assert isinstance(instr, Instr)
@@ -136,9 +148,20 @@ class ClosureWalker(Walker):
                 # level inside the closure with that frame.
                 found = self.outer_closure.local_lookup(w_symbol)
                 if found.on_frame():
+                    # Here we share the cellvalue between sibling closures
+                    if (found.slotindex in
+                            self.outer_closure.shadow_cellvalue_map):
+                        shadow_id = self.outer_closure.shadow_cellvalue_map[
+                            found.slotindex]
+                    else:
+                        shadow_id = self.outer_closure.new_shadow_from_frameslot(
+                                found.slotindex)
+                        self.outer_closure.shadow_cellvalue_map[
+                            found.slotindex] = shadow_id
+
                     new_cval_index = len(self.local_cellvalues)
                     self.local_cellvalues.append(
-                            (found.slotindex << 1) | 0x1)
+                            (shadow_id << 1) | 0x1)
                     value_repr = CellValueRepr(new_cval_index)
 
                 elif found.is_cell(): # copy from it

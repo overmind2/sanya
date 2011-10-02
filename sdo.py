@@ -5,13 +5,13 @@ from sobject import W_Root
 
 class W_ClosureSkeleton(W_Root):
     _immutable_fields_ = ['instrs', 'consts', 'nframeslots', 'raw_cellvalues',
-            'nargs', 'hasvarargs']
+            'shadow_cellvalues', 'nargs', 'hasvarargs']
     """ The skeleton may request the outer closure to share its cellvalues.
         Hmm... How to do it? Or shall I create a global cellvalue table when
         compiling?
     """
     def __init__(self, instrs, consts, nframeslots, raw_cellvalues,
-            shadow_cellvalue_map, nargs, hasvarargs, closkel_table):
+            shadow_cellvalues, nargs, hasvarargs, closkel_table):
         self.instrs = instrs
         self.consts = consts
         self.nframeslots = nframeslots
@@ -23,7 +23,7 @@ class W_ClosureSkeleton(W_Root):
 
         # contains frame slot indexes that need to be made into cellvalues.
         # @see build_closure
-        self.shadow_cellvalue_map = shadow_cellvalue_map
+        self.shadow_cellvalues = shadow_cellvalues
 
         self.nargs = nargs # Actually it's number of positional args...
         self.hasvarargs = hasvarargs
@@ -38,18 +38,12 @@ class W_ClosureSkeleton(W_Root):
         for i, pindex in enumerate(self.raw_cellvalues):
             real_index = pindex >> 1
             is_from_frame = pindex & 0x1
-            # build the cellval by giving it a concret frame
-            if is_from_frame: # is real cell value, build from frame
-                w_cellval = W_CellValue(vm.frame, real_index)
-                cellvalues[i] = w_cellval
-
-                # and link to the vm's cellval frame
-                vm.cellval_head.append(w_cellval)
-
+            if is_from_frame: # is from the current shadow cellvalue frame.
+                w_cellval = vm.shadow_cellvalues[real_index]
             else: # is borrowed cell value
                 w_cellval = vm.cellvalues[real_index]
-                cellvalues[i] = w_cellval
-        # instance of closure.
+            cellvalues[i] = w_cellval
+        # instanitiate a newly bound closure.
         return W_Closure(self, cellvalues)
 
     def to_string(self):

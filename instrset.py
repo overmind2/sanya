@@ -13,6 +13,7 @@
     python-like modules).
 """
 from sobject import *
+from sdo import W_CellValue
 
 OP_TYPE_DUMMY = 0
 OP_TYPE_ABC = 1
@@ -229,11 +230,12 @@ class Call(Instr):
             return
 
         assert w_proc.is_procedure()
-        assert w_proc.skeleton.nargs <= actual_argcount
+        w_skel = w_proc.skeleton
+        assert w_skel.nargs <= actual_argcount
 
         # handle varargs.
-        if w_proc.skeleton.nargs < actual_argcount:
-            assert(w_proc.skeleton.hasvarargs)
+        if w_skel.nargs < actual_argcount:
+            assert(w_skel.hasvarargs)
             # vararg is slowish.
             vararg = pylist2scm([
                 vm.frame.get(index_of_first_arg + i)
@@ -247,9 +249,15 @@ class Call(Instr):
         # switch vm to the new closure
         old_frame = vm.frame
         vm.frame = vm.new_frame(w_proc.skeleton.nframeslots)
-        vm.consts = w_proc.skeleton.consts
+        vm.consts = w_skel.consts
         vm.cellvalues = w_proc.cellvalues
-        vm.instrs = w_proc.skeleton.instrs
+        # loading cellvalues from frame to shadow cellvalue frame.
+        vm.shadow_cellvalues = shad_frame = [None] * len(w_skel.shadow_cellvalues)
+        for i, frameindex in enumerate(w_skel.shadow_cellvalues):
+            w_cellvalue = shad_frame[i] = W_CellValue(vm.frame, frameindex)
+            vm.cellval_head.append(w_cellvalue)
+
+        vm.instrs = w_skel.instrs
         vm.pc = 0
         vm.return_addr = dest_reg
 
@@ -282,7 +290,8 @@ class TailCall(Instr):
         the current stack frame since the current closure's frame
         is gone.
         If it's a pyfunc then it's just like normal Call.
-        Codes copied for now, refactor them later.
+
+        TODO: Unify codes with call.
     """
     op_type = OP_TYPE_ABC
 
@@ -309,11 +318,12 @@ class TailCall(Instr):
             return
 
         assert w_proc.is_procedure()
-        assert w_proc.skeleton.nargs <= actual_argcount
+        w_skel = w_proc.skeleton
+        assert w_skel.nargs <= actual_argcount
 
         # handle varargs.
-        if w_proc.skeleton.nargs < actual_argcount:
-            assert(w_proc.skeleton.hasvarargs)
+        if w_skel.nargs < actual_argcount:
+            assert(w_skel.hasvarargs)
             # vararg is slowish.
             # XXX: scmlist_to_pylist here
             vararg = pylist2scm([
@@ -328,10 +338,17 @@ class TailCall(Instr):
 
         # switch vm to the new closure
         old_frame = vm.frame
-        vm.frame = vm.new_frame(w_proc.skeleton.nframeslots)
-        vm.consts = w_proc.skeleton.consts
+        vm.frame = vm.new_frame(w_skel.nframeslots)
+        vm.consts = w_skel.consts
         vm.cellvalues = w_proc.cellvalues
-        vm.instrs = w_proc.skeleton.instrs
+
+        # loading cellvalues from frame to shadow cellvalue frame.
+        vm.shadow_cellvalues = shad_frame = [None] * len(w_skel.shadow_cellvalues)
+        for i, frameindex in enumerate(w_skel.shadow_cellvalues):
+            w_cellvalue = shad_frame[i] = W_CellValue(vm.frame, frameindex)
+            vm.cellval_head.append(w_cellvalue)
+
+        vm.instrs = w_skel.instrs
         vm.pc = 0
         #vm.return_addr = dest_reg # return address is not changed.
 
@@ -339,10 +356,10 @@ class TailCall(Instr):
         # Note that if we have continuous stack frame then the argument
         # copying overhead could be avoided. But does it worth?
         # Anyway we can take a profile first.
-        for i in xrange(w_proc.skeleton.nargs):
+        for i in xrange(w_skel.nargs):
             vm.frame.set(i, old_frame.get(i + index_of_first_arg))
-        if w_proc.skeleton.hasvarargs:
-            vm.frame.set(w_proc.skeleton.nargs, vararg)
+        if w_skel.hasvarargs:
+            vm.frame.set(w_skel.nargs, vararg)
 
     def __repr__(self):
         if self.C == 0:

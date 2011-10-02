@@ -39,6 +39,7 @@ class Dump(object):
         self.frame = vm.frame
         self.consts = vm.consts
         self.cellvalues = vm.cellvalues
+        self.shadow_cellvalues = vm.shadow_cellvalues
         self.instrs = vm.instrs
         self.pc = vm.pc
         self.return_addr = vm.return_addr
@@ -48,6 +49,7 @@ class Dump(object):
         vm.frame = self.frame
         vm.consts = self.consts
         vm.cellvalues = self.cellvalues
+        vm.shadow_cellvalues = self.shadow_cellvalues
         vm.instrs = self.instrs
         vm.pc = self.pc
         vm.return_addr = self.return_addr
@@ -63,6 +65,7 @@ class VM(object):
         self.frame = None
         self.consts = []
         self.cellvalues = []
+        self.shadow_cellvalues = []
         self.globalvars = {}
         self.instrs = []
         self.pc = 0
@@ -88,6 +91,11 @@ class VM(object):
         self.pc = 0
         self.consts = w_skel.consts
         self.instrs = w_skel.instrs
+
+        # since toplevel variables are all globals, we dont have to bother
+        # with cellvalues-related things
+
+        # load the skeleton table and clean up
         self.closkel_table = w_skel.closkel_table
         w_skel.closkel_table = None
 
