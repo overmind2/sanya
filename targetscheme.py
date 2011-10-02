@@ -5,8 +5,8 @@ import __pypy_path__
 from pypy.rlib.streamio import fdopen_as_stream, open_file_as_stream
 from pypy.rlib.objectmodel import we_are_translated
 
-from sanya.configuration import DEBUG
-from sanya.parser import parse
+from sanya.config import DEBUG
+from sanya.parser import parse_string
 from sanya.compilation import compile_list_of_expr
 from sanya.stdlib import open_lib
 from sanya.vm import VM
@@ -22,7 +22,7 @@ def jitpolicy(driver):
 
 def stream_to_skeleton(stream):
     content = stream.readall()
-    expr_list = parse(content)
+    expr_list = parse_string(content)
     return compile_list_of_expr(expr_list)
 
 def run_file(filename):
@@ -99,7 +99,7 @@ def repl():
         if not raw_line_of_code:
             continue # handle plain ENTER
 
-        expr_list = parse(raw_line_of_code)
+        expr_list = parse_string(raw_line_of_code)
         if not expr_list:
             continue # handle whitespace in RPy
 

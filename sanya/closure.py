@@ -1,4 +1,4 @@
-""" Calling and execution related things.
+""" How closures are build and called?
 """
 from sanya.objectmodel import W_Root
 

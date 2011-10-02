@@ -1,11 +1,13 @@
-# make jit
 from pypy.rlib.jit import JitDriver, hint
 from sanya.closure import W_CellValue, CellValueNode
-from sanya.configuration import DEBUG
+from sanya.config import DEBUG
 
+# make jit
 jitdriver = JitDriver(greens=['pc', 'instr'], reds=['vm', 'frame'])
 
 class HaltException(Exception):
+    """ Raise this and VM will stop running.
+    """
     pass
 
 class Frame(object):

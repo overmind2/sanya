@@ -3,6 +3,15 @@ from pypy.rlib.parsing.makepackrat import (PackratParser,
         BacktrackException, Status)
 from sanya.objectmodel import make_symbol, W_Pair, W_Fixnum, w_nil, make_bool
 
+def parse_string(code_string):
+    """ Parse a string and return a sexpression.
+    """
+    p = MyParser(code_string)
+    return p.prog()
+
+# ____________________________________________________________________________
+# implementation details.
+
 quote_symbol = make_symbol('quote')
 
 def make_quote(sexpr):
@@ -69,8 +78,4 @@ class MyParser(PackratParser):
         return {W_Pair(car, cdr)}
       | return {w_nil};
     """
-
-def parse(code_string):
-    p = MyParser(code_string)
-    return p.prog()
 

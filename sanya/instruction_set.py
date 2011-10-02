@@ -12,7 +12,7 @@
     In the future it may also capture its current globalvars (to make
     python-like modules).
 """
-from sanya.objectmodel import *
+from sanya.objectmodel import w_nil, pylist2scm
 from sanya.closure import W_CellValue
 
 OP_TYPE_DUMMY = 0
