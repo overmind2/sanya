@@ -11,14 +11,19 @@ class W_ClosureSkeleton(W_Root):
         compiling?
     """
     def __init__(self, instrs, consts, nframeslots, raw_cellvalues,
-            nargs, hasvarargs, closkel_table):
+            shadow_cellvalue_map, nargs, hasvarargs, closkel_table):
         self.instrs = instrs
         self.consts = consts
         self.nframeslots = nframeslots
 
         # rlist of ints, if &0x1 then it's a cell from vm.frame
         # else it's a cell from vm.cellvalue
+        # @see build_closure
         self.raw_cellvalues = raw_cellvalues
+
+        # contains frame slot indexes that need to be made into cellvalues.
+        # @see build_closure
+        self.shadow_cellvalue_map = shadow_cellvalue_map
 
         self.nargs = nargs # Actually it's number of positional args...
         self.hasvarargs = hasvarargs
@@ -68,7 +73,7 @@ class W_ClosureSkeleton(W_Root):
         return buf.getvalue()
 
 class W_Closure(W_Root):
-    #_immutable_fields_ = ['skeleton']
+    #_immutable_fields_ = ['skeleton', 'cellvalues'] # why not?
 
     def __init__(self, skeleton, cellvalues):
         self.skeleton = skeleton
@@ -81,14 +86,14 @@ class W_Closure(W_Root):
         return '#<procedure>'
 
 class W_CellValue(W_Root):
-    """ Multiple closures must share the same cellvalue. Let's do it.
-        A callval can be a prototype as well, when its baseframe is None.
+    """ Multiple closures must share the same cellvalue. That is,
+        some how they have the same reference/pointer.
     """
     def __init__(self, baseframe, slotindex):
         self.baseframe = baseframe
         self.slotindex = slotindex
         self.escaped = False
-        self.heap_value = None
+        self.escaped_value = None
 
     def to_string(self):
         return '#<cellvalue>'
@@ -116,7 +121,7 @@ class W_CellValue(W_Root):
 
     def setvalue(self, value):
         if self.escaped:
-            self.heap_value = value
+            self.escaped_value = value
         else:
             self.baseframe.set(self.slotindex, value)
 

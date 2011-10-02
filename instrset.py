@@ -14,15 +14,20 @@
 """
 from sobject import *
 
+OP_TYPE_DUMMY = 0
 OP_TYPE_ABC = 1
 OP_TYPE_ABx = 2
 
 class Instr(object):
-    op_num = -1
-    A = -1
-    B = -1
-    C = -1
-    op_type = OP_TYPE_ABC
+    _immutable_fields_ = ['A', 'B', 'C', 'Bx']
+    op_num = 0
+    op_type = OP_TYPE_DUMMY
+
+    def __init__(self):
+        self.A = 0
+        self.B = 0
+        self.C = 0
+        self.Bx = 0
 
     def dispatch(self, vm):
         raise NotImplementedError
@@ -32,6 +37,9 @@ class Instr(object):
         return '[instr]'
 
     def dump_u32(self):
+        if not self.op_num:
+            raise ValueError('no opnum')
+
         if self.op_type == OP_TYPE_ABC:
             return (self.op_num << (32 - 5) | self.A << (32 - 5 - 9) |
                     self.B << (32 - 5 - 9 - 9) | self.C)
@@ -42,6 +50,14 @@ class Instr(object):
             raise ValueError('unknown op type')
 
 class Halt(Instr):
+    op_type = OP_TYPE_ABC
+
+    def __init__(self):
+        self.A = 0
+        self.B = 0
+        self.C = 0
+        self.Bx = 0
+
     def dispatch(self, vm):
         vm.halt() # instantly, no other things will happen.
 
@@ -51,11 +67,13 @@ class Halt(Instr):
 class MoveLocal(Instr):
     """ rA = rB
     """
-    _immutable_fields_ = ['A', 'B']
+    op_type = OP_TYPE_ABC
 
     def __init__(self, A, B):
         self.A = A
         self.B = B
+        self.C = 0
+        self.Bx = 0
 
     def dispatch(self, vm):
         vm.frame.set(self.A, vm.frame.get(self.B))
@@ -66,11 +84,13 @@ class MoveLocal(Instr):
 class LoadGlobal(Instr):
     """ rA = globalvars[kB]
     """
-    _immutable_fields_ = ['A', 'B']
+    op_type = OP_TYPE_ABC
 
     def __init__(self, A, B):
         self.A = A
         self.B = B
+        self.C = 0
+        self.Bx = 0
 
     def dispatch(self, vm):
         vm.frame.set(self.A, vm.globalvars[vm.consts[self.B]])
@@ -81,11 +101,13 @@ class LoadGlobal(Instr):
 class LoadCell(Instr):
     """ rA = cellvalues[B].getvalue()
     """
-    _immutable_fields_ = ['A', 'B']
+    op_type = OP_TYPE_ABC
 
     def __init__(self, A, B):
         self.A = A
         self.B = B
+        self.C = 0
+        self.Bx = 0
 
     def dispatch(self, vm):
         vm.frame.set(self.A, vm.cellvalues[self.B].getvalue())
@@ -96,11 +118,13 @@ class LoadCell(Instr):
 class LoadConst(Instr):
     """ rA = kB
     """
-    _immutable_fields_ = ['A', 'B']
+    op_type = OP_TYPE_ABC
 
     def __init__(self, A, B):
         self.A = A
         self.B = B
+        self.C = 0
+        self.Bx = 0
 
     def dispatch(self, vm):
         vm.frame.set(self.A, vm.consts[self.B])
@@ -111,11 +135,13 @@ class LoadConst(Instr):
 class StoreGlobal(Instr):
     """ globalvars[kA] = rB
     """
-    _immutable_fields_ = ['A', 'B']
+    op_type = OP_TYPE_ABC
 
     def __init__(self, A, B):
         self.A = A
         self.B = B
+        self.C = 0
+        self.Bx = 0
     
     def dispatch(self, vm):
         vm.globalvars[vm.consts[self.A]] = vm.frame.get(self.B)
@@ -126,11 +152,13 @@ class StoreGlobal(Instr):
 class StoreCell(Instr):
     """ cellvalues[A].setvalue(rB)
     """
-    _immutable_fields_ = ['A', 'B']
+    op_type = OP_TYPE_ABC
 
     def __init__(self, A, B):
         self.A = A
         self.B = B
+        self.C = 0
+        self.Bx = 0
     
     def dispatch(self, vm):
         vm.cellvalues[self.A].setvalue(vm.frame.get(self.B))
@@ -148,11 +176,13 @@ class BuildClosure(Instr):
 
         rA = build_closure_and_open_cellvalues(closkel_table[B])
     """
-    _immutable_fields_ = ['A', 'B']
+    op_type = OP_TYPE_ABC
 
     def __init__(self, A, B):
         self.A = A
         self.B = B
+        self.C = 0
+        self.Bx = 0
 
     def dispatch(self, vm):
         w_skel = vm.closkel_table[self.B]
@@ -161,7 +191,7 @@ class BuildClosure(Instr):
         vm.frame.set(self.A, w_proc)
 
     def __repr__(self):
-        return '[r(%d) = buildclosure(SkelTable[%d])]' % (self.A, self.B)
+        return '[r(%d) = buildclosure(CloskelT[%d])]' % (self.A, self.B)
 
 class Call(Instr):
     """ rA = rB(rB + 1, ..., rB + C)
@@ -174,12 +204,13 @@ class Call(Instr):
 
         The current state of vm will be stored in a dump.
     """
-    _immutable_fields_ = ['A', 'B', 'C']
+    op_type = OP_TYPE_ABC
 
     def __init__(self, A, B, C):
         self.A = A
         self.B = B
         self.C = C
+        self.Bx = 0
 
     def dispatch(self, vm):
         dest_reg = self.A
@@ -253,12 +284,13 @@ class TailCall(Instr):
         If it's a pyfunc then it's just like normal Call.
         Codes copied for now, refactor them later.
     """
-    _immutable_fields_ = ['A', 'B', 'C']
+    op_type = OP_TYPE_ABC
 
     def __init__(self, A, B, C):
         self.A = A
         self.B = B
         self.C = C
+        self.Bx = 0
 
     def dispatch(self, vm):
         dest_reg = self.A
@@ -333,10 +365,13 @@ class Return(Instr):
         Currently we only return one and exactly one value.
         The function cell values will be cleaned as well.
     """
-    _immutable_fields_ = ['B']
+    op_type = OP_TYPE_ABC
 
     def __init__(self, B):
+        self.A = 0
         self.B = B
+        self.C = 0
+        self.Bx = 0
 
     def dispatch(self, vm):
         """ return_value = vm.frame[self.B]
@@ -355,10 +390,13 @@ class Return(Instr):
 class Branch(Instr):
     """ Unconditional jump, pc += Bx
     """
-    _immutable_fields_ = ['Bx']
+    op_type = OP_TYPE_ABx
 
     def __init__(self, Bx):
         self.Bx = Bx
+        self.A = 0
+        self.B = 0
+        self.C = 0
 
     def dispatch(self, vm):
         vm.pc += self.Bx
@@ -370,11 +408,13 @@ class Branch(Instr):
 class BranchIfFalse(Instr):
     """ if not rA then pc += self.Bx
     """
-    _immutable_fields_ = ['A', 'Bx']
+    op_type = OP_TYPE_ABx
 
     def __init__(self, A, Bx):
         self.A = A
         self.Bx = Bx
+        self.B = 0
+        self.C = 0
 
     def dispatch(self, vm):
         if not vm.frame.get(self.A).to_bool():
@@ -408,4 +448,42 @@ op_map = {
 
 for op_name, op_num in op_map.items():
     globals()[op_name].op_num = op_num
+
+# _________________________________________________________________________
+# make instruction from uint32?
+def make_instr(u32):
+    op = u32 >> (32 - 5)
+    A = (u32 >> (32 - 5 - 9)) & ((1 << 9) - 1)
+    B = (u32 >> (32 - 5 - 9 - 9)) & ((1 << 9) - 1)
+    C = u32 & ((1 << 9) - 1)
+    Bx = (u32 >> (32 - 5 - 9 - 9)) & ((1 << 18) - 1)
+
+    if op == 1:
+        return Halt()
+    elif op == 2:
+        return MoveLocal(A, B)
+    elif op == 3:
+        return LoadGlobal(A, B)
+    elif op == 4:
+        return LoadCell(A, B)
+    elif op == 5:
+        return LoadConst(A, B)
+    elif op == 6:
+        return StoreGlobal(A, B)
+    elif op == 7:
+        return StoreCell(A, B)
+    elif op == 8:
+        return BuildClosure(A, B)
+    elif op == 9:
+        return Call(A, B, C)
+    elif op == 10:
+        return TailCall(A, B, C)
+    elif op == 11:
+        return Return(B)
+    elif op == 12:
+        return Branch(Bx)
+    elif op == 13:
+        return BranchIfFalse(A, Bx)
+    else:
+        raise ValueError('unknown opcode -- %d' % op)
 

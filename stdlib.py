@@ -1,4 +1,5 @@
-""" Provides some builtin functions written in sanya-asm.
+""" Provides some builtin functions so that we don't need to write in asm...
+    Calling functions here may be a bottleneck but what to do?
 """
 import os
 from sobject import *
@@ -14,7 +15,7 @@ class W_AddProc(W_PyProc):
         res = W_Fixnum(0)
         for w_obj in py_args:
             assert w_obj.is_fixnum()
-            res = W_Fixnum(res.ival + w_obj.ival)
+            res = W_Fixnum(res.get_fixnum()+ w_obj.get_fixnum())
         return res
 
     def to_string(self):
@@ -30,7 +31,7 @@ class W_SubtractProc(W_PyProc):
 
         for w_obj in py_args[1:]:
             assert w_obj.is_fixnum()
-            res = W_Fixnum(res.ival - w_obj.ival)
+            res = W_Fixnum(res.get_fixnum() - w_obj.get_fixnum())
         return res
 
     def to_string(self):
@@ -66,7 +67,7 @@ class W_LessThanProc(W_PyProc):
         lhs = py_args[0]
         rhs = py_args[1]
         assert lhs.is_fixnum() and rhs.is_fixnum()
-        return make_bool(lhs.ival < rhs.ival)
+        return make_bool(lhs.get_fixnum() < rhs.get_fixnum())
 
     def to_string(self):
         return '#<primitive-procedure lt>'

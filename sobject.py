@@ -1,3 +1,4 @@
+from pypy.rlib.jit import purefunction
 
 class W_Root(object):
     """ Base class for all application-level objects.
@@ -15,6 +16,9 @@ class W_Root(object):
         return False
 
     def is_null(self):
+        return False
+
+    def is_unspecified(self):
         return False
 
     def is_boolean(self):
@@ -55,6 +59,11 @@ class W_Symbol(W_Root):
     def is_symbol(self):
         return True
 
+    @purefunction
+    def get_symbol(self):
+        return self.sval
+
+    @purefunction
     def to_string(self):
         return self.sval
 
@@ -69,7 +78,7 @@ def make_symbol(sval):
     return got
 
 class W_Fixnum(W_Root):
-    #_immutable_fields_ = ['ival']
+    _immutable_fields_ = ['ival']
 
     def __init__(self, ival):
         self.ival = ival
@@ -77,6 +86,11 @@ class W_Fixnum(W_Root):
     def is_fixnum(self):
         return True
 
+    @purefunction
+    def get_fixnum(self):
+        return self.ival
+
+    @purefunction
     def to_string(self):
         return str(self.ival)
 
@@ -181,6 +195,9 @@ def make_bool(bval):
 class W_Unspecified(W_Root):
     def to_string(self):
         return '#<unspecified>'
+
+    def is_unspecified(self):
+        return True
 
 w_unspecified = W_Unspecified()
 

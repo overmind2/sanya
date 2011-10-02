@@ -4,6 +4,7 @@
     - Deferred allocation of frame slot: Yes I can learn from my libjit impl.
 """
 
+from pypy.rlib.jit import dont_look_inside
 from instrset import (Instr, MoveLocal, LoadConst, LoadCell, LoadGlobal,
         StoreCell, StoreGlobal, BuildClosure,
         Return, BranchIfFalse, Branch, TailCall, Call)
@@ -12,6 +13,7 @@ from sobject import w_unspecified, scmlist2py
 class SchemeSyntaxError(Exception):
     pass
 
+@dont_look_inside
 def compile_list_of_expr(expr_list):
     # using default sematics.
     walker = ClosureWalker()
@@ -58,6 +60,7 @@ class ClosureWalker(Walker):
         self.outer_closure = outer_closure
         self.deferred_lambdas = []
 
+    @dont_look_inside
     def to_closure_skeleton(self):
         from sdo import W_ClosureSkeleton
 
@@ -95,6 +98,7 @@ class ClosureWalker(Walker):
         assert isinstance(instr, Instr)
         self.instructions.append(instr)
 
+    @dont_look_inside
     def visit_list_of_expr(self, w_exprlist):
         """ Visit a list of expression, compile them to a closure skeleton with
             no cellvalues, and append a return statement to the instructions
@@ -110,11 +114,13 @@ class ClosureWalker(Walker):
                 last_value_repr = self.visit(w_expr)
         self.emit(Return(self.cast_to_local(last_value_repr).to_index()))
 
+    @dont_look_inside
     def visit(self, w_object, flag=None):
         if flag is None:
             flag = CompilationFlag()
         return w_object.accept_compiler_walker(self, flag)
 
+    @dont_look_inside
     def local_lookup(self, w_symbol):
         """ Recursively lookup for a symbol until toplevel is reached.
         """
@@ -134,11 +140,13 @@ class ClosureWalker(Walker):
                     self.local_cellvalues.append(
                             (found.slotindex << 1) | 0x1)
                     value_repr = CellValueRepr(new_cval_index)
+
                 elif found.is_cell(): # copy from it
                     new_cval_index = len(self.local_cellvalues)
                     self.local_cellvalues.append( # copy outer cellval
                             found.cellindex << 1)
                     value_repr = CellValueRepr(new_cval_index)
+
                 elif found.is_global():
                     return found
                 else:
@@ -163,6 +171,7 @@ class ClosureWalker(Walker):
         sval = w_symbol.to_string()
         return sval in self.special_form_list
 
+    @dont_look_inside
     def visit_special_form(self, w_proc, w_args, flag):
         sval = w_proc.to_string()
         if sval == 'define':
@@ -278,6 +287,7 @@ class ClosureWalker(Walker):
         else:
             raise ValueError, 'not a special form'
 
+    @dont_look_inside
     def visit_binding(self, w_name, value_repr):
         """ This will be simpler -- if w_name is in local namespace, this is
             the same as set!. Otherwise, create a new binding.
@@ -311,6 +321,7 @@ class ClosureWalker(Walker):
                 self.local_variables[sval] = new_val
                 self.set_frame_slot(new_val, value_repr)
 
+    @dont_look_inside
     def visit_rebind(self, w_name, value_repr):
         """ (set! w_name value_repr)
         """
@@ -338,6 +349,7 @@ class ClosureWalker(Walker):
             else:
                 raise ValueError, 'unreachable'
 
+    @dont_look_inside
     def visit_application(self, w_proc, w_args, flag):
         from sobject import scmlist2py
 
@@ -370,6 +382,7 @@ class ClosureWalker(Walker):
                     proc_slot.to_index(), len(lst)))
         return result_value_repr
 
+    @dont_look_inside
     def cast_to_local(self, value_repr):
         if value_repr.on_frame():
             return value_repr
@@ -392,6 +405,7 @@ class ClosureWalker(Walker):
         else:
             raise ValueError, 'unreached'
 
+    @dont_look_inside
     def set_frame_slot(self, old_repr, new_repr):
         assert old_repr.on_frame()
         if new_repr.on_frame():
@@ -484,6 +498,7 @@ class DeferredLambdaCompilation(object):
         self.instrindex = instrindex # the instruction index
         self.dest_val_repr = dest_val_repr # a frame slot
 
+    @dont_look_inside
     def resume_compilation(self):
         from sobject import scmlist2py
 
