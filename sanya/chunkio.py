@@ -1,8 +1,8 @@
 
-from instrset import make_instr, Return
-from sdo import W_ClosureSkeleton
-from sobject import (make_symbol, W_Fixnum, W_Pair, make_bool, w_unspecified,
-    w_nil)
+from sanya.instruction_set import make_instr, Return
+from sanya.closure import W_ClosureSkeleton
+from sanya.objectmodel import (make_symbol, W_Fixnum,
+        W_Pair, make_bool, w_unspecified, w_nil)
 
 CHUNK_HEADER = '-' + 'sanya' + '--'
 
@@ -12,6 +12,19 @@ def dump(root_skel, stream):
     dump_number(len(root_skel.closkel_table), stream)
     for skel in root_skel.closkel_table:
         dump_skel(skel, stream)
+
+def load(stream):
+    assert stream.read(len(CHUNK_HEADER)) == CHUNK_HEADER, 'Wrong chunk header'
+    root_skel = load_skel(stream)
+    nskeletons = load_number(stream)
+    closkel_table = [None] * nskeletons
+    for i in xrange(nskeletons):
+        closkel_table[i] = load_skel(stream)
+    root_skel.closkel_table = closkel_table
+    return root_skel
+
+# ___________________________________________________________________________
+# implementation details
 
 def dump_skel(skel, stream):
     dump_instr_list(skel.instrs, stream)
@@ -57,22 +70,29 @@ def dump_const(const, stream):
     if const.is_symbol():
         stream.write(K_SYMBOL)
         dump_string(const.get_symbol(), stream)
+
     elif const.is_fixnum():
         stream.write(K_FIXNUM)
         dump_number(const.get_fixnum(), stream)
-    elif const.is_pair(): # be aware of stack overflow?
+
+    elif const.is_pair():
+        # XXX: recursive call -- stack overflow?
         stream.write(K_PAIR)
         dump_const(const.car, stream)
         dump_const(const.cdr, stream)
+
     elif const.is_null():
         stream.write(K_NULL)
+
     elif const.is_boolean():
         if const.to_bool():
             stream.write(K_TRUE)
         else:
             stream.write(K_FALSE)
+
     elif const.is_unspecified():
         stream.write(K_UNSPEC)
+
     else:
         raise TypeError('unknown constant -- %s' % const.to_string())
 
@@ -91,16 +111,6 @@ def dump_number(ival, stream):
 def dump_string(sval, stream):
     dump_number(len(sval), stream)
     stream.write(sval)
-
-def load(stream):
-    assert stream.read(len(CHUNK_HEADER)) == CHUNK_HEADER, 'Wrong chunk header'
-    root_skel = load_skel(stream)
-    nskeletons = load_number(stream)
-    closkel_table = [None] * nskeletons
-    for i in xrange(nskeletons):
-        closkel_table[i] = load_skel(stream)
-    root_skel.closkel_table = closkel_table
-    return root_skel
 
 def load_skel(stream):
     instrs = load_instr_list(stream)
@@ -153,24 +163,34 @@ def load_const(stream):
     tag = stream.read(1)
     if tag == K_SYMBOL:
         return make_symbol(load_string(stream))
+
     elif tag == K_FIXNUM:
         return W_Fixnum(load_number(stream))
+
     elif tag == K_PAIR:
+        # XXX: recursive call -- stack overflow?
         car = load_const(stream)
         cdr = load_const(stream)
         return W_Pair(car, cdr)
+
     elif tag == K_NULL:
         return w_nil
+
     elif tag == K_TRUE:
         return make_bool(True)
+
     elif tag == K_FALSE:
         return make_bool(False)
+
     elif tag == K_UNSPEC:
         return w_unspecified
+
     else:
         raise ValueError('unknown tag -- %s' % tag)
 
 def load_number(stream):
+    """ Ugly since RPython want the string to be of length 1...
+    """
     c1 = stream.read(1)[0]
     v1 = ord(c1)
 
@@ -192,25 +212,4 @@ def load_string(stream):
         slen -= len(s)
         buf.append(s)
     return ''.join(buf)
-
-
-def test():
-    from cStringIO import StringIO
-    f = StringIO()
-    c = Return(2)
-
-    lis = [c] * 10
-
-    dump_instr_list(lis, f)
-
-    f.seek(0)
-    lis2 = load_instr_list(f)
-
-    for c2 in lis2:
-        assert c2.A == 1
-        assert c2.B == 2
-        assert c2.C == 3
-
-    print f.getvalue()
-
 

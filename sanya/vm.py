@@ -1,9 +1,9 @@
 # make jit
-from pypy.rlib.jit import JitDriver
-jitdriver = JitDriver(greens=['pc', 'instr'], reds=['vm', 'frame'])
+from pypy.rlib.jit import JitDriver, hint
+from sanya.closure import W_CellValue, CellValueNode
+from sanya.configuration import DEBUG
 
-from sdo import W_CellValue, CellValueNode
-from sconf import DEBUG
+jitdriver = JitDriver(greens=['pc', 'instr'], reds=['vm', 'frame'])
 
 class HaltException(Exception):
     pass
@@ -13,6 +13,7 @@ class Frame(object):
         can be cheaper -- no need to copy args between frames.
     """
     def __init__(self, size):
+        self = hint(self, access_directly=True, fresh_virtualizable=True)
         self.items = [None] * size
 
     def __repr__(self):

@@ -2,7 +2,7 @@
     Calling functions here may be a bottleneck but what to do?
 """
 import os
-from sobject import *
+from sanya.objectmodel import *
 
 def open_lib(vm):
     for name, value in lib.items():

@@ -1,15 +1,15 @@
-from sobject import W_Root
-
 """ Calling and execution related things.
 """
+from sanya.objectmodel import W_Root
 
 class W_ClosureSkeleton(W_Root):
-    _immutable_fields_ = ['instrs', 'consts', 'nframeslots', 'raw_cellvalues',
-            'shadow_cellvalues', 'nargs', 'hasvarargs']
     """ The skeleton may request the outer closure to share its cellvalues.
         Hmm... How to do it? Or shall I create a global cellvalue table when
         compiling?
     """
+    _immutable_fields_ = ['instrs', 'consts', 'nframeslots', 'raw_cellvalues',
+            'shadow_cellvalues', 'nargs', 'hasvarargs']
+
     def __init__(self, instrs, consts, nframeslots, raw_cellvalues,
             shadow_cellvalues, nargs, hasvarargs, closkel_table):
         self.instrs = instrs

@@ -1,7 +1,7 @@
 import __pypy_path__
 from pypy.rlib.parsing.makepackrat import (PackratParser,
         BacktrackException, Status)
-from sobject import make_symbol, W_Pair, W_Fixnum, w_nil, make_bool
+from sanya.objectmodel import make_symbol, W_Pair, W_Fixnum, w_nil, make_bool
 
 quote_symbol = make_symbol('quote')
 

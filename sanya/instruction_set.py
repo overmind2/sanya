@@ -12,8 +12,8 @@
     In the future it may also capture its current globalvars (to make
     python-like modules).
 """
-from sobject import *
-from sdo import W_CellValue
+from sanya.objectmodel import *
+from sanya.closure import W_CellValue
 
 OP_TYPE_DUMMY = 0
 OP_TYPE_ABC = 1

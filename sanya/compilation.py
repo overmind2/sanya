@@ -5,10 +5,11 @@
 """
 
 from pypy.rlib.jit import dont_look_inside
-from instrset import (Instr, MoveLocal, LoadConst, LoadCell, LoadGlobal,
-        StoreCell, StoreGlobal, BuildClosure,
+from sanya.instruction_set import (Instr, MoveLocal, LoadConst,
+        LoadCell, LoadGlobal, StoreCell, StoreGlobal, BuildClosure,
         Return, BranchIfFalse, Branch, TailCall, Call)
-from sobject import w_unspecified, scmlist2py
+from sanya.objectmodel import w_unspecified, scmlist2py
+from sanya.closure import W_ClosureSkeleton
 
 class SchemeSyntaxError(Exception):
     pass
@@ -48,7 +49,7 @@ class ClosureWalker(Walker):
         self.framesize = 0
         self.local_consts = []
         self.consts_map = {} # maps consts to its id
-        self.local_cellvalues = [] # list of packed ints, @see sdo.ClosSkel 
+        self.local_cellvalues = [] # list of packed ints, @see closure.ClosSkel 
 
         # temporarily maps frame index to shadow_cv's index
         self.shadow_cellvalue_map = {}
@@ -67,8 +68,6 @@ class ClosureWalker(Walker):
 
     @dont_look_inside
     def to_closure_skeleton(self):
-        from sdo import W_ClosureSkeleton
-
         for dfd_lambda in self.deferred_lambdas:
             dfd_lambda.resume_compilation()
         self.deferred_lambdas = []
@@ -374,8 +373,6 @@ class ClosureWalker(Walker):
 
     @dont_look_inside
     def visit_application(self, w_proc, w_args, flag):
-        from sobject import scmlist2py
-
         lst = []
         w_rest = scmlist2py(w_args, lst)
         if not w_rest.is_null():
@@ -523,8 +520,6 @@ class DeferredLambdaCompilation(object):
 
     @dont_look_inside
     def resume_compilation(self):
-        from sobject import scmlist2py
-
         lambda_walker = ClosureWalker(self.walker)
         w_formals = self.expr_list[0]
         lambda_body = self.expr_list[1:]

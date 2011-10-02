@@ -1,16 +1,17 @@
+#!/usr/bin/env python
 import sys
 
 import __pypy_path__
 from pypy.rlib.streamio import fdopen_as_stream, open_file_as_stream
 from pypy.rlib.objectmodel import we_are_translated
 
-from sconf import DEBUG
-from sparser import parse
-from scompile import compile_list_of_expr
-from stdlib import open_lib
-from svm import VM
-from sobject import w_unspecified
-import skeldump
+from sanya.configuration import DEBUG
+from sanya.parser import parse
+from sanya.compilation import compile_list_of_expr
+from sanya.stdlib import open_lib
+from sanya.vm import VM
+from sanya.objectmodel import w_unspecified
+from sanya import chunkio
 
 if not we_are_translated():
     import readline
@@ -60,14 +61,14 @@ def compile_file(filename, outfname):
     stream.close()
 
     outf = open_file_as_stream(outfname, 'w')
-    skeldump.dump(w_skel, outf)
+    chunkio.dump(w_skel, outf)
     outf.close()
 
 def load_compiled_chunk(filename):
     vm = VM()
     open_lib(vm)
     stream = open_file_as_stream(filename, 'r')
-    w_skel = skeldump.load(stream)
+    w_skel = chunkio.load(stream)
     stream.close()
     vm.bootstrap(w_skel)
     vm.run()
@@ -147,7 +148,7 @@ def entry_point(argv):
             generate_header(fname)
         elif op == '-v': # view compiled chunk
             stream = open_file_as_stream(fname, 'r')
-            w_skel = skeldump.load(stream)
+            w_skel = chunkio.load(stream)
             stream.close()
             print w_skel
         else:
