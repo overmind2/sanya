@@ -1,6 +1,6 @@
 
 from sanya.instruction_set import make_instr, Return
-from sanya.closure import W_ClosureSkeleton
+from sanya.closure import W_Skeleton
 from sanya.objectmodel import (make_symbol, W_Fixnum,
         W_Pair, make_bool, w_unspecified, w_nil)
 
@@ -137,7 +137,7 @@ def load_skel(stream):
         raise ValueError('hasvararg -- not 0/1')
 
     stream.read(1) # the newline
-    return W_ClosureSkeleton(instrs, consts, nframeslots,
+    return W_Skeleton(instrs, consts, nframeslots,
             cellvalues, shadow_cellvalues, nargs, hasvarargs, None)
 
 def load_instr_list(stream):

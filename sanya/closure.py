@@ -1,11 +1,20 @@
 """ How closures are build and called?
 """
+from pypy.rlib.jit import purefunction
 from sanya.objectmodel import W_Root
 
-class W_ClosureSkeleton(W_Root):
-    """ The skeleton may request the outer closure to share its cellvalues.
-        Hmm... How to do it? Or shall I create a global cellvalue table when
-        compiling?
+class W_Skeleton(W_Root):
+    """ Closure skeleton, just like function prototype in Lua,
+        contains every runtime information about a closure,
+        expect the actual call value list.
+
+        When build a closure from its skeleton, the raw_cellvalues
+        list is iterated and its int values are unpacked. If the
+        LSB is 0, then this cell value is copied from vm's current
+        cell value list. Otherwise, this cell value is build from
+        vm's current frame.
+
+        XXX: consider unify this with vm.Dump and vm.Frame?
     """
     _immutable_fields_ = ['instrs', 'consts', 'nframeslots', 'raw_cellvalues',
             'shadow_cellvalues', 'nargs', 'hasvarargs']
@@ -67,11 +76,19 @@ class W_ClosureSkeleton(W_Root):
         return buf.getvalue()
 
 class W_Closure(W_Root):
-    #_immutable_fields_ = ['skeleton', 'cellvalues'] # why not?
+    _immutable_fields_ = ['skeleton', 'cellvalues'] # why not?
 
     def __init__(self, skeleton, cellvalues):
         self.skeleton = skeleton
         self.cellvalues = cellvalues
+
+    @purefunction
+    def get_skeleton(self):
+        return self.skeleton
+
+    @purefunction
+    def get_cellvalues(self):
+        return self.cellvalues
 
     def is_procedure(self):
         return True

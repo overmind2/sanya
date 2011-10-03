@@ -230,7 +230,7 @@ class Call(Instr):
             return
 
         assert w_proc.is_procedure()
-        w_skel = w_proc.skeleton
+        w_skel = w_proc.get_skeleton()
         assert w_skel.nargs <= actual_argcount
 
         # handle varargs.
@@ -248,9 +248,9 @@ class Call(Instr):
 
         # switch vm to the new closure
         old_frame = vm.frame
-        vm.frame = vm.new_frame(w_proc.skeleton.nframeslots)
+        vm.frame = vm.new_frame(w_skel.nframeslots)
         vm.consts = w_skel.consts
-        vm.cellvalues = w_proc.cellvalues
+        vm.cellvalues = w_proc.get_cellvalues()
         # loading cellvalues from frame to shadow cellvalue frame.
         vm.shadow_cellvalues = shad_frame = [None] * len(w_skel.shadow_cellvalues)
         for i, frameindex in enumerate(w_skel.shadow_cellvalues):
@@ -265,10 +265,10 @@ class Call(Instr):
         # Note that if we have continuous stack frame then the argument
         # copying overhead could be avoided. But does it worth?
         # Anyway we can take a profile first.
-        for i in xrange(w_proc.skeleton.nargs):
+        for i in xrange(w_skel.nargs):
             vm.frame.set(i, old_frame.get(i + index_of_first_arg))
-        if w_proc.skeleton.hasvarargs:
-            vm.frame.set(w_proc.skeleton.nargs, vararg)
+        if w_skel.hasvarargs:
+            vm.frame.set(w_skel.nargs, vararg)
 
     def __repr__(self):
         if self.C == 0:
@@ -318,7 +318,7 @@ class TailCall(Instr):
             return
 
         assert w_proc.is_procedure()
-        w_skel = w_proc.skeleton
+        w_skel = w_proc.get_skeleton()
         assert w_skel.nargs <= actual_argcount
 
         # handle varargs.
@@ -340,7 +340,7 @@ class TailCall(Instr):
         old_frame = vm.frame
         vm.frame = vm.new_frame(w_skel.nframeslots)
         vm.consts = w_skel.consts
-        vm.cellvalues = w_proc.cellvalues
+        vm.cellvalues = w_proc.get_cellvalues()
 
         # loading cellvalues from frame to shadow cellvalue frame.
         vm.shadow_cellvalues = shad_frame = [None] * len(w_skel.shadow_cellvalues)

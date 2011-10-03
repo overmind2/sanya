@@ -9,7 +9,7 @@ from sanya.instruction_set import (Instr, MoveLocal, LoadConst,
         LoadCell, LoadGlobal, StoreCell, StoreGlobal, BuildClosure,
         Return, BranchIfFalse, Branch, TailCall, Call)
 from sanya.objectmodel import w_unspecified, scmlist2py
-from sanya.closure import W_ClosureSkeleton
+from sanya.closure import W_Skeleton
 
 class SchemeSyntaxError(Exception):
     pass
@@ -73,12 +73,12 @@ class ClosureWalker(Walker):
         self.deferred_lambdas = []
 
         if self.outer_closure: # is not toplevel
-            return W_ClosureSkeleton(self.instructions,
+            return W_Skeleton(self.instructions,
                     self.local_consts, self.framesize,
                     self.local_cellvalues, self.shadow_cellvalues,
                     self.nargs, self.hasvarargs, None)
         else: # toplevel -- should pass its closure skeleton table
-            return W_ClosureSkeleton(self.instructions,
+            return W_Skeleton(self.instructions,
                     self.local_consts, self.framesize,
                     self.local_cellvalues, self.shadow_cellvalues,
                     self.nargs, self.hasvarargs, self.closkel_table)
