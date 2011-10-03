@@ -6,8 +6,8 @@
     kBx: extended immediate value, usually used in branching.
 
     A closure, in order to be executed, should have `instrs`, `consts`,
-    `nframeslots` and `cellvalues`.
-    To figure out the number of arguments, `nargs` and `hasvarargs` are also
+    `frame_size` and `cellvalues`.
+    To figure out the number of arguments, `nb_args` and `varargs_p` are also
     included.
     In the future it may also capture its current globalvars (to make
     python-like modules).
@@ -15,6 +15,7 @@
 from sanya.objectmodel import w_nil, pylist2scm
 from sanya.closure import W_CellValue
 
+# define the instruction type. This is used in assembling.
 OP_TYPE_DUMMY = 0
 OP_TYPE_ABC = 1
 OP_TYPE_ABx = 2
@@ -175,7 +176,7 @@ class BuildClosure(Instr):
 
         @see sdo.W_ClosureSkeleton.build_closure()
 
-        rA = build_closure_and_open_cellvalues(closkel_table[B])
+        rA = build_closure_and_open_cellvalues(skeleton_registry[B])
     """
     op_type = OP_TYPE_ABC
 
@@ -186,7 +187,7 @@ class BuildClosure(Instr):
         self.Bx = 0
 
     def dispatch(self, vm):
-        w_skel = vm.closkel_table[self.B]
+        w_skel = vm.skeleton_registry[self.B]
         assert w_skel.is_procedure_skeleton()
         w_proc = w_skel.build_closure(vm)
         vm.frame.set(self.A, w_proc)
@@ -231,11 +232,11 @@ class Call(Instr):
 
         assert w_proc.is_procedure()
         w_skel = w_proc.get_skeleton()
-        assert w_skel.nargs <= actual_argcount
+        assert w_skel.nb_args <= actual_argcount
 
         # handle varargs.
-        if w_skel.nargs < actual_argcount:
-            assert(w_skel.hasvarargs)
+        if w_skel.nb_args < actual_argcount:
+            assert(w_skel.varargs_p)
             # vararg is slowish.
             vararg = pylist2scm([
                 vm.frame.get(index_of_first_arg + i)
@@ -248,12 +249,12 @@ class Call(Instr):
 
         # switch vm to the new closure
         old_frame = vm.frame
-        vm.frame = vm.new_frame(w_skel.nframeslots)
+        vm.frame = vm.new_frame(w_skel.frame_size)
         vm.consts = w_skel.consts
         vm.cellvalues = w_proc.get_cellvalues()
         # loading cellvalues from frame to shadow cellvalue frame.
-        vm.shadow_cellvalues = shad_frame = [None] * len(w_skel.shadow_cellvalues)
-        for i, frameindex in enumerate(w_skel.shadow_cellvalues):
+        vm.fresh_cells = shad_frame = [None] * len(w_skel.fresh_cells)
+        for i, frameindex in enumerate(w_skel.fresh_cells):
             w_cellvalue = shad_frame[i] = W_CellValue(vm.frame, frameindex)
             vm.cellval_head.append(w_cellvalue)
 
@@ -265,10 +266,10 @@ class Call(Instr):
         # Note that if we have continuous stack frame then the argument
         # copying overhead could be avoided. But does it worth?
         # Anyway we can take a profile first.
-        for i in xrange(w_skel.nargs):
+        for i in xrange(w_skel.nb_args):
             vm.frame.set(i, old_frame.get(i + index_of_first_arg))
-        if w_skel.hasvarargs:
-            vm.frame.set(w_skel.nargs, vararg)
+        if w_skel.varargs_p:
+            vm.frame.set(w_skel.nb_args, vararg)
 
     def __repr__(self):
         if self.C == 0:
@@ -319,11 +320,11 @@ class TailCall(Instr):
 
         assert w_proc.is_procedure()
         w_skel = w_proc.get_skeleton()
-        assert w_skel.nargs <= actual_argcount
+        assert w_skel.nb_args <= actual_argcount
 
         # handle varargs.
-        if w_skel.nargs < actual_argcount:
-            assert(w_skel.hasvarargs)
+        if w_skel.nb_args < actual_argcount:
+            assert(w_skel.varargs_p)
             # vararg is slowish.
             # XXX: scmlist_to_pylist here
             vararg = pylist2scm([
@@ -338,13 +339,13 @@ class TailCall(Instr):
 
         # switch vm to the new closure
         old_frame = vm.frame
-        vm.frame = vm.new_frame(w_skel.nframeslots)
+        vm.frame = vm.new_frame(w_skel.frame_size)
         vm.consts = w_skel.consts
         vm.cellvalues = w_proc.get_cellvalues()
 
         # loading cellvalues from frame to shadow cellvalue frame.
-        vm.shadow_cellvalues = shad_frame = [None] * len(w_skel.shadow_cellvalues)
-        for i, frameindex in enumerate(w_skel.shadow_cellvalues):
+        vm.fresh_cells = shad_frame = [None] * len(w_skel.fresh_cells)
+        for i, frameindex in enumerate(w_skel.fresh_cells):
             w_cellvalue = shad_frame[i] = W_CellValue(vm.frame, frameindex)
             vm.cellval_head.append(w_cellvalue)
 
@@ -356,10 +357,10 @@ class TailCall(Instr):
         # Note that if we have continuous stack frame then the argument
         # copying overhead could be avoided. But does it worth?
         # Anyway we can take a profile first.
-        for i in xrange(w_skel.nargs):
+        for i in xrange(w_skel.nb_args):
             vm.frame.set(i, old_frame.get(i + index_of_first_arg))
-        if w_skel.hasvarargs:
-            vm.frame.set(w_skel.nargs, vararg)
+        if w_skel.varargs_p:
+            vm.frame.set(w_skel.nb_args, vararg)
 
     def __repr__(self):
         if self.C == 0:
@@ -467,7 +468,7 @@ for op_name, op_num in op_map.items():
     globals()[op_name].op_num = op_num
 
 # _________________________________________________________________________
-# make instruction from uint32?
+# make instruction from a uint32
 def make_instr(u32):
     op = u32 >> (32 - 5)
     A = (u32 >> (32 - 5 - 9)) & ((1 << 9) - 1)

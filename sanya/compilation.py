@@ -17,53 +17,62 @@ class SchemeSyntaxError(Exception):
 @dont_look_inside
 def compile_list_of_expr(expr_list):
     # using default sematics.
-    walker = ClosureWalker()
+    walker = SkeletonWalker()
     walker.visit_list_of_expr(expr_list)
     return walker.to_closure_skeleton()
 
 # XXX: how to better represent multiple flags?
 class CompilationFlag(object):
     TCO = 0x1
-    FOO = 0x2
+    DEST = 0x2
     BAR = 0x4
     WTF = 0x8
 
-    def __init__(self, flags=0x0):
+    def __init__(self, flags=0x0, desired_destination=None):
         self.flags = flags
+        self.dest = desired_destination
+        if desired_destination:
+            self.flags |= self.DEST
 
     def copy(self):
-        return CompilationFlag(self.flags)
+        return CompilationFlag(self.flags, self.dest)
 
     def has_tco(self):
         return self.flags & self.TCO
+
+    def has_dest(self):
+        return self.flags & self.DEST
+
+    def get_dest(self):
+        return self.dest
 
 
 class Walker(object):
     def visit(self, thing, flag=None):
         raise NotImplementedError
 
-class ClosureWalker(Walker):
-    def __init__(self, outer_closure=None):
+class SkeletonWalker(Walker):
+    def __init__(self, parent_skeleton=None):
         self.global_variables = {} # hmmm... not used until we can modify glvar
-        self.instructions = []
-        self.framesize = 0
-        self.local_consts = []
-        self.consts_map = {} # maps consts to its id
-        self.local_cellvalues = [] # list of packed ints, @see closure.ClosSkel 
+        self.instrs = []
+        self.frame_size = 0
+        self.consts = []
+        self.const_index_map = {} # maps consts to its id
+        self.cell_recipe = [] # list of packed ints, @see closure.ClosSkel 
 
         # temporarily maps frame index to shadow_cv's index
-        self.shadow_cellvalue_map = {}
-        self.shadow_cellvalues = [] # list of ints
+        self.fresh_cell_map = {}
+        self.fresh_cells = [] # list of ints
 
         self.local_variables = {} # frame variable and opened cellvalues
-        self.nargs = 0
-        self.hasvarargs = False
-        if outer_closure:
-            self.closkel_table = outer_closure.closkel_table
+        self.nb_args = 0
+        self.varargs_p = False
+        if parent_skeleton:
+            self.skeleton_registry = parent_skeleton.skeleton_registry
         else:
-            self.closkel_table = []
+            self.skeleton_registry = []
 
-        self.outer_closure = outer_closure
+        self.parent_skeleton = parent_skeleton
         self.deferred_lambdas = []
 
     @dont_look_inside
@@ -72,47 +81,47 @@ class ClosureWalker(Walker):
             dfd_lambda.resume_compilation()
         self.deferred_lambdas = []
 
-        if self.outer_closure: # is not toplevel
-            return W_Skeleton(self.instructions,
-                    self.local_consts, self.framesize,
-                    self.local_cellvalues, self.shadow_cellvalues,
-                    self.nargs, self.hasvarargs, None)
+        if self.parent_skeleton: # is not toplevel
+            return W_Skeleton(self.instrs,
+                    self.consts, self.frame_size,
+                    self.cell_recipe, self.fresh_cells,
+                    self.nb_args, self.varargs_p, None)
         else: # toplevel -- should pass its closure skeleton table
-            return W_Skeleton(self.instructions,
-                    self.local_consts, self.framesize,
-                    self.local_cellvalues, self.shadow_cellvalues,
-                    self.nargs, self.hasvarargs, self.closkel_table)
+            return W_Skeleton(self.instrs,
+                    self.consts, self.frame_size,
+                    self.cell_recipe, self.fresh_cells,
+                    self.nb_args, self.varargs_p, self.skeleton_registry)
 
     def new_frame_slot(self):
-        res = self.framesize
-        self.framesize += 1
+        res = self.frame_size
+        self.frame_size += 1
         return res
 
     def new_const_slot(self, w_obj):
-        if w_obj in self.consts_map:
-            consts_id = self.consts_map[w_obj]
+        if w_obj in self.const_index_map:
+            consts_id = self.const_index_map[w_obj]
         else:
-            consts_id = self.consts_map[w_obj] = len(self.local_consts)
-            self.local_consts.append(w_obj)
+            consts_id = self.const_index_map[w_obj] = len(self.consts)
+            self.consts.append(w_obj)
         return consts_id
 
     def new_skel_slot(self, w_skel):
-        self.closkel_table.append(w_skel)
-        return len(self.closkel_table) - 1
+        self.skeleton_registry.append(w_skel)
+        return len(self.skeleton_registry) - 1
 
-    def new_shadow_from_frameslot(self, frameslot):
-        shadow_slot_id = len(self.shadow_cellvalues)
-        self.shadow_cellvalues.append(frameslot)
-        return shadow_slot_id
+    def new_fresh_cell(self, frameslot):
+        slot_id = len(self.fresh_cells)
+        self.fresh_cells.append(frameslot)
+        return slot_id
 
     def emit(self, instr):
         assert isinstance(instr, Instr)
-        self.instructions.append(instr)
+        self.instrs.append(instr)
 
     @dont_look_inside
     def visit_list_of_expr(self, w_exprlist):
         """ Visit a list of expression, compile them to a closure skeleton with
-            no cellvalues, and append a return statement to the instructions
+            no cellvalues, and append a return statement to the instrs
             generated. After then, to_closure_skeleton() will do the rest work.
         """
         tco_flag = CompilationFlag(CompilationFlag.TCO)
@@ -141,31 +150,31 @@ class ClosureWalker(Walker):
         if sval in self.local_variables:
             return self.local_variables[sval]
         else:
-            if self.outer_closure:
+            if self.parent_skeleton:
                 # Firstly look at outer's locals to look for cellvalues.
                 # Since we need exactly to open the cellvalue exactly one
                 # level inside the closure with that frame.
-                found = self.outer_closure.local_lookup(w_symbol)
+                found = self.parent_skeleton.local_lookup(w_symbol)
                 if found.on_frame():
                     # Here we share the cellvalue between sibling closures
                     if (found.slotindex in
-                            self.outer_closure.shadow_cellvalue_map):
-                        shadow_id = self.outer_closure.shadow_cellvalue_map[
+                            self.parent_skeleton.fresh_cell_map):
+                        shadow_id = self.parent_skeleton.fresh_cell_map[
                             found.slotindex]
                     else:
-                        shadow_id = self.outer_closure.new_shadow_from_frameslot(
+                        shadow_id = self.parent_skeleton.new_fresh_cell(
                                 found.slotindex)
-                        self.outer_closure.shadow_cellvalue_map[
+                        self.parent_skeleton.fresh_cell_map[
                             found.slotindex] = shadow_id
 
-                    new_cval_index = len(self.local_cellvalues)
-                    self.local_cellvalues.append(
+                    new_cval_index = len(self.cell_recipe)
+                    self.cell_recipe.append(
                             (shadow_id << 1) | 0x1)
                     value_repr = CellValueRepr(new_cval_index)
 
                 elif found.is_cell(): # copy from it
-                    new_cval_index = len(self.local_cellvalues)
-                    self.local_cellvalues.append( # copy outer cellval
+                    new_cval_index = len(self.cell_recipe)
+                    self.cell_recipe.append( # copy outer cellval
                             found.cellindex << 1)
                     value_repr = CellValueRepr(new_cval_index)
 
@@ -243,19 +252,19 @@ class ClosureWalker(Walker):
             pred_local_val = self.cast_to_local(self.visit(w_pred))
 
             # saved instr index, for jump to else
-            iftrue_branch_instr_index = len(self.instructions)
-            self.instructions.append(None) # branch length to be calculated
+            iftrue_branch_instr_index = len(self.instrs)
+            self.instrs.append(None) # branch length to be calculated
 
-            # if_true instructions
+            # if_true instrs
             iftrue_result_repr = self.visit(w_iftrue, flag)
             self.set_frame_slot(result_value_repr, iftrue_result_repr)
-            iftrue_branch_jumpby = (len(self.instructions) -
+            iftrue_branch_jumpby = (len(self.instrs) -
                     iftrue_branch_instr_index)
-            self.instructions[iftrue_branch_instr_index] = BranchIfFalse(
+            self.instrs[iftrue_branch_instr_index] = BranchIfFalse(
                     pred_local_val.to_index(), iftrue_branch_jumpby)
 
-            iffalse_branch_instr_index = len(self.instructions)
-            self.instructions.append(None) # branch length to be calculated
+            iffalse_branch_instr_index = len(self.instrs)
+            self.instrs.append(None) # branch length to be calculated
             if len(lst) == 2:
                 self.set_frame_slot(result_value_repr,
                         ConstValueRepr(self.new_const_slot(w_unspecified)))
@@ -264,9 +273,9 @@ class ClosureWalker(Walker):
                 iffalse_result_repr = self.visit(w_iffalse, flag)
                 self.set_frame_slot(result_value_repr, iffalse_result_repr)
 
-            iffalse_branch_jumpby = (len(self.instructions) -
+            iffalse_branch_jumpby = (len(self.instrs) -
                     iffalse_branch_instr_index - 1)
-            self.instructions[iffalse_branch_instr_index] = Branch(
+            self.instrs[iffalse_branch_instr_index] = Branch(
                     iffalse_branch_jumpby)
             return result_value_repr
 
@@ -286,8 +295,8 @@ class ClosureWalker(Walker):
             if len(lst) < 2:
                 raise SchemeSyntaxError, 'lambda -- missing expression'
             frame_val_repr = FrameValueRepr(self.new_frame_slot())
-            current_instr_pos = len(self.instructions)
-            self.instructions.append(None)
+            current_instr_pos = len(self.instrs)
+            self.instrs.append(None)
             # compile the lambdas in the end
             self.deferred_lambdas.append(DeferredLambdaCompilation(
                 self, lst, current_instr_pos, frame_val_repr))
@@ -332,7 +341,7 @@ class ClosureWalker(Walker):
             else:
                 raise ValueError, 'unreachable'
         else:
-            if not self.outer_closure: # We are in toplevel
+            if not self.parent_skeleton: # We are in toplevel
                 # create new global binding
                 new_val = GlobalValueRepr(w_name)
                 self.global_variables[sval] = new_val
@@ -520,7 +529,7 @@ class DeferredLambdaCompilation(object):
 
     @dont_look_inside
     def resume_compilation(self):
-        lambda_walker = ClosureWalker(self.walker)
+        lambda_walker = SkeletonWalker(self.walker)
         w_formals = self.expr_list[0]
         lambda_body = self.expr_list[1:]
 
@@ -532,15 +541,15 @@ class DeferredLambdaCompilation(object):
                 raise SchemeSyntaxError('lambda -- formal varargs should be '
                     'nothing but a symbol, got %s' % w_argname.to_string())
 
-        lambda_walker.nargs = len(arg_list) # set positional argcount
+        lambda_walker.nb_args = len(arg_list) # set positional argcount
         if w_rest.is_null():
-            lambda_walker.hasvarargs = False
+            lambda_walker.varargs_p = False
         else:
             if not w_rest.is_symbol():
                 raise SchemeSyntaxError('lambda -- formal varargs should be '
                         'nothing but a symbol, got %s' % w_rest.to_string())
             else:
-                lambda_walker.hasvarargs = True
+                lambda_walker.varargs_p = True
 
         # fill in the frame slots using those arguments
         for w_argname in arg_list:
@@ -549,7 +558,7 @@ class DeferredLambdaCompilation(object):
                     = frame_slot_repr
 
         # if vararg
-        if lambda_walker.hasvarargs:
+        if lambda_walker.varargs_p:
             frame_slot_repr = FrameValueRepr(lambda_walker.new_frame_slot())
             lambda_walker.local_variables[w_rest.to_string()] \
                     = frame_slot_repr
@@ -557,7 +566,7 @@ class DeferredLambdaCompilation(object):
         # compile the body. XXX: create a global skeleton table like lua?
         lambda_walker.visit_list_of_expr(lambda_body)
         w_lambda_skeleton = lambda_walker.to_closure_skeleton()
-        self.walker.instructions[self.instrindex] = BuildClosure(
+        self.walker.instrs[self.instrindex] = BuildClosure(
             self.dest_val_repr.to_index(),
             self.walker.new_skel_slot(w_lambda_skeleton))
 

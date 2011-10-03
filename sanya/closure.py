@@ -3,65 +3,65 @@
 from pypy.rlib.jit import purefunction
 from sanya.objectmodel import W_Root
 
+# XXX: consider unify this with vm.Dump and vm.Frame?
 class W_Skeleton(W_Root):
     """ Closure skeleton, just like function prototype in Lua,
         contains every runtime information about a closure,
         expect the actual call value list.
 
-        When build a closure from its skeleton, the raw_cellvalues
+        When build a closure from its skeleton, the cell_recipt
         list is iterated and its int values are unpacked. If the
         LSB is 0, then this cell value is copied from vm's current
         cell value list. Otherwise, this cell value is build from
         vm's current frame.
 
-        XXX: consider unify this with vm.Dump and vm.Frame?
-
         __slots__:
-            codes,
-            consts,
-            frame_size,
-            cell_recipe,
-            fresh_cells,
-            nb_args,
-            has_varargs,
+            codes ; list of instructions
+            consts ; list of constants
+            frame_size ; number of frame slots required for this closure.
+            cell_recipe ; list of ints, used when building closure instance.
+                        ; data is packed as (index << 1) | fresh_p
+                        ; if fresh_p is true, the cell comes from the current
+                        ; running closure's {fresh_cells}.
+                        ; Otherwise, the cell comes from the current running
+                        ; closure's {cellvalues}.
+            fresh_cells ; used to build fresh cell values from frame
+                        ; when entering a new closure
+            nb_args ; number of args required
+            varargs_p ; whether the closure accepts varargs or not.
+            skeleton_registry ; list of skeletons, @see Lua's KPROTO
     """
-    _immutable_fields_ = ['codes', 'consts', 'nframeslots', 'raw_cellvalues',
-            'shadow_cellvalues', 'nargs', 'hasvarargs']
+    _immutable_fields_ = ['codes', 'consts', 'frame_size', 'cell_recipt',
+            'fresh_cells', 'nb_args', 'varargs_p']
 
-    def __init__(self, codes, consts, nframeslots, raw_cellvalues,
-            shadow_cellvalues, nargs, hasvarargs, closkel_table):
+    def __init__(self, codes, consts, frame_size, cell_recipt,
+            fresh_cells, nb_args, varargs_p, skeleton_registry):
+        # Those are all immutables except for skeleton_registry, which
+        # will be set to None when bootstraping vm.
         self.codes = codes
         self.consts = consts
-        self.nframeslots = nframeslots
-
-        # rlist of ints, if &0x1 then it's a cell from vm.frame
-        # else it's a cell from vm.cellvalue
-        # @see build_closure
-        self.raw_cellvalues = raw_cellvalues
-
-        # contains frame slot indexes that need to be made into cellvalues.
-        # @see build_closure
-        self.shadow_cellvalues = shadow_cellvalues
-
-        self.nargs = nargs # Actually it's number of positional args...
-        self.hasvarargs = hasvarargs
-        self.closkel_table = closkel_table
+        self.frame_size = frame_size
+        self.cell_recipt = cell_recipt
+        self.fresh_cells = fresh_cells
+        self.nb_args = nb_args
+        self.varargs_p = varargs_p
+        self.skeleton_registry = skeleton_registry
 
     def is_procedure_skeleton(self):
         return True
 
     def build_closure(self, vm):
-        cellvalues = [None] * len(self.raw_cellvalues)
-
-        for i, pindex in enumerate(self.raw_cellvalues):
-            real_index = pindex >> 1
-            is_from_frame = pindex & 0x1
-            if is_from_frame: # is from the current shadow cellvalue frame.
-                w_cellval = vm.shadow_cellvalues[real_index]
-            else: # is borrowed cell value
-                w_cellval = vm.cellvalues[real_index]
-            cellvalues[i] = w_cellval
-        # instanitiate a newly bound closure.
+        cellvalues = [None] * len(self.cell_recipt)
+        for i, packed_data in enumerate(self.cell_recipt):
+            # meaning of {index} depends on {fresh_p}.
+            # @see docstring for this class.
+            (index, fresh_p) = ((packed_data >> 1), (packed_data & 0x1))
+            if fresh_p: # is freshly moved from the vm's temporary cell table.
+                w_cell = vm.fresh_cells[index]
+            else: # is a borrowed cell value. move from vm.cellvalues
+                w_cell = vm.cellvalues[index]
+            cellvalues[i] = w_cell
+        # instanitiate a new closure.
         return W_Closure(self, cellvalues)
 
     def to_string(self):
@@ -85,6 +85,10 @@ class W_Skeleton(W_Root):
         return buf.getvalue()
 
 class W_Closure(W_Root):
+    """ Closure instance, built during runtime.
+        @see W_Skeleton
+        @see instruction_set.BuildClosure
+    """
     _immutable_fields_ = ['skeleton', 'cellvalues'] # why not?
 
     def __init__(self, skeleton, cellvalues):
@@ -106,8 +110,16 @@ class W_Closure(W_Root):
         return '#<procedure>'
 
 class W_CellValue(W_Root):
-    """ Multiple closures must share the same cellvalue. That is,
-        some how they have the same reference/pointer.
+    """ Cellvalues are used to implement nested scope / closures.
+
+        A cellvalue can be in two status: not-escaped or escaped.
+        When it's not escaped, it contains a frame and an index pointing
+        to a frame slot. When it's escaped, the value on the frame slot
+        will be 'grabbed' out and stored inside this cell.
+
+        Cellvalues only exist in closure instances that is built
+        during runtime, since cellvalue's constructor require an
+        existing frame as the first parameter.
     """
     def __init__(self, baseframe, slotindex):
         self.baseframe = baseframe
@@ -156,6 +168,8 @@ class W_CellValue(W_Root):
             return False
 
 class CellValueNode(object):
+    """ Container class to store cellvalues in doubly-linked list.
+    """
     _immutable_fields_ = ['val']
     def __init__(self, val, prevnode, nextnode):
         self.val = val
@@ -163,6 +177,8 @@ class CellValueNode(object):
         self.nextnode = nextnode
 
     def remove(self):
+        """ Return this node and return the next node.
+        """
         res = self.nextnode
         self.prevnode.nextnode = self.nextnode
         self.nextnode.prevnode = self.prevnode
@@ -171,6 +187,8 @@ class CellValueNode(object):
         return res
 
     def append(self, val):
+        """ Hmmm... The name of this function should actually be ``prepend``.
+        """
         new_node = CellValueNode(val, self, self.nextnode)
         self.nextnode.prevnode = new_node
         self.nextnode = new_node

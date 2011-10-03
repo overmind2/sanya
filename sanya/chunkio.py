@@ -9,18 +9,18 @@ CHUNK_HEADER = '-' + 'sanya' + '--'
 def dump(root_skel, stream):
     stream.write(CHUNK_HEADER)
     dump_skel(root_skel, stream)
-    dump_number(len(root_skel.closkel_table), stream)
-    for skel in root_skel.closkel_table:
+    dump_number(len(root_skel.skeleton_registry), stream)
+    for skel in root_skel.skeleton_registry:
         dump_skel(skel, stream)
 
 def load(stream):
     assert stream.read(len(CHUNK_HEADER)) == CHUNK_HEADER, 'Wrong chunk header'
     root_skel = load_skel(stream)
     nskeletons = load_number(stream)
-    closkel_table = [None] * nskeletons
+    skeleton_registry = [None] * nskeletons
     for i in xrange(nskeletons):
-        closkel_table[i] = load_skel(stream)
-    root_skel.closkel_table = closkel_table
+        skeleton_registry[i] = load_skel(stream)
+    root_skel.skeleton_registry = skeleton_registry
     return root_skel
 
 # ___________________________________________________________________________
@@ -29,18 +29,18 @@ def load(stream):
 def dump_skel(skel, stream):
     dump_instr_list(skel.codes, stream)
     dump_const_list(skel.consts, stream)
-    dump_number(skel.nframeslots, stream)
+    dump_number(skel.frame_size, stream)
 
-    dump_number(len(skel.raw_cellvalues), stream)
-    for cellvalue_repr in skel.raw_cellvalues:
+    dump_number(len(skel.cell_recipt), stream)
+    for cellvalue_repr in skel.cell_recipt:
         dump_number(cellvalue_repr, stream)
 
-    dump_number(len(skel.shadow_cellvalues), stream)
-    for shadow_id in skel.shadow_cellvalues:
+    dump_number(len(skel.fresh_cells), stream)
+    for shadow_id in skel.fresh_cells:
         dump_number(shadow_id, stream)
 
-    dump_number(skel.nargs, stream)
-    if skel.hasvarargs:
+    dump_number(skel.nb_args, stream)
+    if skel.varargs_p:
         stream.write('\x01')
     else:
         stream.write('\x00')
@@ -115,30 +115,30 @@ def dump_string(sval, stream):
 def load_skel(stream):
     codes = load_instr_list(stream)
     consts = load_const_list(stream)
-    nframeslots = load_number(stream)
+    frame_size = load_number(stream)
 
     ncellvalues = load_number(stream)
     cellvalues = [-1] * ncellvalues
     for i in xrange(ncellvalues):
         cellvalues[i] = load_number(stream)
     
-    nshadow_cellvalues = load_number(stream)
-    shadow_cellvalues = [-1] * nshadow_cellvalues
-    for i in xrange(nshadow_cellvalues):
-        shadow_cellvalues[i] = load_number(stream)
+    nfresh_cells = load_number(stream)
+    fresh_cells = [-1] * nfresh_cells
+    for i in xrange(nfresh_cells):
+        fresh_cells[i] = load_number(stream)
 
-    nargs = load_number(stream)
+    nb_args = load_number(stream)
     nxt_chr = stream.read(1)
     if nxt_chr == '\x01':
-        hasvarargs = True
+        varargs_p = True
     elif nxt_chr == '\x00':
-        hasvarargs = False
+        varargs_p = False
     else:
         raise ValueError('hasvararg -- not 0/1')
 
     stream.read(1) # the newline
-    return W_Skeleton(codes, consts, nframeslots,
-            cellvalues, shadow_cellvalues, nargs, hasvarargs, None)
+    return W_Skeleton(codes, consts, frame_size,
+            cellvalues, fresh_cells, nb_args, varargs_p, None)
 
 def load_instr_list(stream):
     ncodes = load_number(stream)

@@ -11,10 +11,13 @@ class HaltException(Exception):
     pass
 
 class Frame(object):
-    """ TODO: make the stack a continuous space so that function calls
+    """ Could make the stack frame a continuous space so that function calls
         can be cheaper -- no need to copy args between frames.
+        However since in most of the situations we are doing tail-calls
+        which will not benefit from this...
     """
     def __init__(self, size):
+        # Wondering why this hint is not giving any speed improvement...
         self = hint(self, access_directly=True, fresh_virtualizable=True)
         self.items = [None] * size
 
@@ -42,7 +45,7 @@ class Dump(object):
         self.frame = vm.frame
         self.consts = vm.consts
         self.cellvalues = vm.cellvalues
-        self.shadow_cellvalues = vm.shadow_cellvalues
+        self.fresh_cells = vm.fresh_cells
         self.codes = vm.codes
         self.pc = vm.pc
         self.return_addr = vm.return_addr
@@ -52,7 +55,7 @@ class Dump(object):
         vm.frame = self.frame
         vm.consts = self.consts
         vm.cellvalues = self.cellvalues
-        vm.shadow_cellvalues = self.shadow_cellvalues
+        vm.fresh_cells = self.fresh_cells
         vm.codes = self.codes
         vm.pc = self.pc
         vm.return_addr = self.return_addr
@@ -68,7 +71,7 @@ class VM(object):
         self.frame = None
         self.consts = []
         self.cellvalues = []
-        self.shadow_cellvalues = []
+        self.fresh_cells = []
         self.globalvars = {}
         self.codes = []
         self.pc = 0
@@ -76,11 +79,13 @@ class VM(object):
         self.dump = None
         self.exit_value = None # the toplevel return value
 
-        # cellvalues are shared since they die quickly
+        # cellvalues are stored in a doubly-linkedlist since they birth and die
+        # quickly and d-list allow O(1) insertion/deletion.
+        # ``hao ba zhe shi chao xi Lua-5.1 de....``
         self.cellval_head = CellValueNode(None, None, None)
         self.cellval_head.nextnode = self.cellval_head
         self.cellval_head.prevnode = self.cellval_head
-        self.closkel_table = []
+        self.skeleton_registry = []
 
     def new_frame(self, size):
         return Frame(size)
@@ -88,9 +93,9 @@ class VM(object):
     def bootstrap(self, w_skel):
         assert w_skel.is_procedure_skeleton()
         if self.frame is None:
-            self.frame = self.new_frame(w_skel.nframeslots)
+            self.frame = self.new_frame(w_skel.frame_size)
         else:
-            self.frame.resize(w_skel.nframeslots)
+            self.frame.resize(w_skel.frame_size)
         self.pc = 0
         self.consts = w_skel.consts
         self.codes = w_skel.codes
@@ -99,8 +104,8 @@ class VM(object):
         # with cellvalues-related things
 
         # load the skeleton table and clean up
-        self.closkel_table = w_skel.closkel_table
-        w_skel.closkel_table = None
+        self.skeleton_registry = w_skel.skeleton_registry
+        w_skel.skeleton_registry = None
 
     def halt(self):
         raise HaltException
