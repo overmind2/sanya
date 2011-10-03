@@ -15,13 +15,22 @@ class W_Skeleton(W_Root):
         vm's current frame.
 
         XXX: consider unify this with vm.Dump and vm.Frame?
+
+        __slots__:
+            codes,
+            consts,
+            frame_size,
+            cell_recipe,
+            fresh_cells,
+            nb_args,
+            has_varargs,
     """
-    _immutable_fields_ = ['instrs', 'consts', 'nframeslots', 'raw_cellvalues',
+    _immutable_fields_ = ['codes', 'consts', 'nframeslots', 'raw_cellvalues',
             'shadow_cellvalues', 'nargs', 'hasvarargs']
 
-    def __init__(self, instrs, consts, nframeslots, raw_cellvalues,
+    def __init__(self, codes, consts, nframeslots, raw_cellvalues,
             shadow_cellvalues, nargs, hasvarargs, closkel_table):
-        self.instrs = instrs
+        self.codes = codes
         self.consts = consts
         self.nframeslots = nframeslots
 

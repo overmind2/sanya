@@ -43,7 +43,7 @@ class Dump(object):
         self.consts = vm.consts
         self.cellvalues = vm.cellvalues
         self.shadow_cellvalues = vm.shadow_cellvalues
-        self.instrs = vm.instrs
+        self.codes = vm.codes
         self.pc = vm.pc
         self.return_addr = vm.return_addr
         self.dump = vm.dump
@@ -53,7 +53,7 @@ class Dump(object):
         vm.consts = self.consts
         vm.cellvalues = self.cellvalues
         vm.shadow_cellvalues = self.shadow_cellvalues
-        vm.instrs = self.instrs
+        vm.codes = self.codes
         vm.pc = self.pc
         vm.return_addr = self.return_addr
         vm.dump = self.dump
@@ -70,7 +70,7 @@ class VM(object):
         self.cellvalues = []
         self.shadow_cellvalues = []
         self.globalvars = {}
-        self.instrs = []
+        self.codes = []
         self.pc = 0
         self.return_addr = 0
         self.dump = None
@@ -93,7 +93,7 @@ class VM(object):
             self.frame.resize(w_skel.nframeslots)
         self.pc = 0
         self.consts = w_skel.consts
-        self.instrs = w_skel.instrs
+        self.codes = w_skel.codes
 
         # since toplevel variables are all globals, we dont have to bother
         # with cellvalues-related things
@@ -133,7 +133,7 @@ class VM(object):
     def run(self):
         try:
             while True:
-                instr = self.instrs[self.pc]
+                instr = self.codes[self.pc]
 
                 jitdriver.jit_merge_point(pc=self.pc,
                         instr=instr,
@@ -150,5 +150,5 @@ class VM(object):
 
     def __repr__(self):
         """NOT_RPYTHON"""
-        return '<vm pc=%02d instr=%s>' % (self.pc, self.instrs[self.pc])
+        return '<vm pc=%02d instr=%s>' % (self.pc, self.codes[self.pc])
 

@@ -1,5 +1,5 @@
 
-from sanya.instruction_set import make_instr, Return
+from sanya.instruction_set import make_instr
 from sanya.closure import W_Skeleton
 from sanya.objectmodel import (make_symbol, W_Fixnum,
         W_Pair, make_bool, w_unspecified, w_nil)
@@ -27,7 +27,7 @@ def load(stream):
 # implementation details
 
 def dump_skel(skel, stream):
-    dump_instr_list(skel.instrs, stream)
+    dump_instr_list(skel.codes, stream)
     dump_const_list(skel.consts, stream)
     dump_number(skel.nframeslots, stream)
 
@@ -113,7 +113,7 @@ def dump_string(sval, stream):
     stream.write(sval)
 
 def load_skel(stream):
-    instrs = load_instr_list(stream)
+    codes = load_instr_list(stream)
     consts = load_const_list(stream)
     nframeslots = load_number(stream)
 
@@ -137,15 +137,15 @@ def load_skel(stream):
         raise ValueError('hasvararg -- not 0/1')
 
     stream.read(1) # the newline
-    return W_Skeleton(instrs, consts, nframeslots,
+    return W_Skeleton(codes, consts, nframeslots,
             cellvalues, shadow_cellvalues, nargs, hasvarargs, None)
 
 def load_instr_list(stream):
-    ninstrs = load_number(stream)
-    instrs = [None] * ninstrs
-    for i in xrange(ninstrs):
-        instrs[i] = load_instr(stream)
-    return instrs
+    ncodes = load_number(stream)
+    codes = [None] * ncodes
+    for i in xrange(ncodes):
+        codes[i] = load_instr(stream)
+    return codes
 
 def load_instr(stream):
     u32 = load_number(stream)

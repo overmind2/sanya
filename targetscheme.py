@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import sys
 
+import __pypy_path__
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.streamio import fdopen_as_stream, open_file_as_stream
 

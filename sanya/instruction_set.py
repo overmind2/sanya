@@ -257,7 +257,7 @@ class Call(Instr):
             w_cellvalue = shad_frame[i] = W_CellValue(vm.frame, frameindex)
             vm.cellval_head.append(w_cellvalue)
 
-        vm.instrs = w_skel.instrs
+        vm.codes = w_skel.codes
         vm.pc = 0
         vm.return_addr = dest_reg
 
@@ -348,7 +348,7 @@ class TailCall(Instr):
             w_cellvalue = shad_frame[i] = W_CellValue(vm.frame, frameindex)
             vm.cellval_head.append(w_cellvalue)
 
-        vm.instrs = w_skel.instrs
+        vm.codes = w_skel.codes
         vm.pc = 0
         #vm.return_addr = dest_reg # return address is not changed.
 
