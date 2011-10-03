@@ -12,8 +12,8 @@ from sanya.parser import parse_string
 from sanya.stdlib import open_lib
 from sanya.vm import VM
 
-
 if not we_are_translated():
+    # we can have better repl when running in top of cpython
     import readline
 
 def jitpolicy(driver):
