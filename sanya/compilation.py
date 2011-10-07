@@ -32,6 +32,7 @@ class CompilationFlag(object):
         self.flags = flags
         self.dest = desired_destination
         if desired_destination:
+            assert desired_destination.is_assignable()
             self.flags |= self.DEST
 
     def copy(self):
@@ -92,7 +93,7 @@ class SkeletonWalker(Walker):
                     self.cell_recipe, self.fresh_cells,
                     self.nb_args, self.varargs_p, self.skeleton_registry)
 
-    def new_frame_slot(self):
+    def alloc_frame_slot(self):
         res = self.frame_size
         self.frame_size += 1
         return res
@@ -141,7 +142,7 @@ class SkeletonWalker(Walker):
         return w_object.accept_compiler_walker(self, flag)
 
     @dont_look_inside
-    def local_lookup(self, w_symbol):
+    def local_lookup(self, w_symbol, flag=None):
         """ Recursively lookup for a symbol until toplevel is reached.
         """
         assert w_symbol.is_symbol()
@@ -154,7 +155,7 @@ class SkeletonWalker(Walker):
                 # Firstly look at outer's locals to look for cellvalues.
                 # Since we need exactly to open the cellvalue exactly one
                 # level inside the closure with that frame.
-                found = self.parent_skeleton.local_lookup(w_symbol)
+                found = self.parent_skeleton.local_lookup(w_symbol, flag)
                 if found.on_frame():
                     # Here we share the cellvalue between sibling closures
                     if (found.slotindex in
@@ -188,11 +189,11 @@ class SkeletonWalker(Walker):
                 # If we cannot find the symbol, then it must be a global.
                 return GlobalValueRepr(w_symbol)
 
-    def visit_fixnum_const(self, w_fixnum):
+    def visit_fixnum_const(self, w_fixnum, flag=None):
         assert w_fixnum.is_fixnum()
         return ConstValueRepr(self.new_const_slot(w_fixnum))
 
-    def visit_boolean_const(self, w_boolean):
+    def visit_boolean_const(self, w_boolean, flag=None):
         assert w_boolean.is_boolean()
         return ConstValueRepr(self.new_const_slot(w_boolean))
 
@@ -238,7 +239,10 @@ class SkeletonWalker(Walker):
 
         elif sval == 'if':
             # (if pred iftrue [else])
-            result_value_repr = FrameValueRepr(self.new_frame_slot())
+            if flag.has_dest():
+                result_value_repr = flag.get_dest()
+            else:
+                result_value_repr = FrameValueRepr(self.alloc_frame_slot())
 
             lst = []
             w_rest = scmlist2py(w_args, lst)
@@ -249,6 +253,8 @@ class SkeletonWalker(Walker):
             w_iftrue = lst[1]
 
             # predicate value repr
+            # XXX: Note that this is a temporary variable and can be reused
+            #      if we return this frame slot to the allocator.
             pred_local_val = self.cast_to_local(self.visit(w_pred))
 
             # saved instr index, for jump to else
@@ -294,7 +300,10 @@ class SkeletonWalker(Walker):
                 raise SchemeSyntaxError, 'lambda -- not a well-formed list'
             if len(lst) < 2:
                 raise SchemeSyntaxError, 'lambda -- missing expression'
-            frame_val_repr = FrameValueRepr(self.new_frame_slot())
+            if flag.has_dest():
+                frame_val_repr = flag.get_dest()
+            else:
+                frame_val_repr = FrameValueRepr(self.alloc_frame_slot())
             current_instr_pos = len(self.instrs)
             self.instrs.append(None)
             # compile the lambdas in the end
@@ -348,7 +357,7 @@ class SkeletonWalker(Walker):
                 self.set_global_value(new_val, value_repr)
             else:
                 # create new local binding
-                new_val = FrameValueRepr(self.new_frame_slot())
+                new_val = FrameValueRepr(self.alloc_frame_slot())
                 self.local_variables[sval] = new_val
                 self.set_frame_slot(new_val, value_repr)
 
@@ -387,22 +396,29 @@ class SkeletonWalker(Walker):
         if not w_rest.is_null():
             raise SchemeSyntaxError('application -- not a well-formed list')
         # allocate len(lst) + 1 frame slots
-        proc_slot = FrameValueRepr(self.new_frame_slot())
-        arg_slots = [FrameValueRepr(self.new_frame_slot())
+        # XXX: ensure they sit together.
+        proc_slot = FrameValueRepr(self.alloc_frame_slot())
+        arg_slots = [FrameValueRepr(self.alloc_frame_slot())
                 for i in xrange(len(lst))]
 
         # evaluate the proc and the args
-        proc_val_repr = self.visit(w_proc)
-        self.set_frame_slot(proc_slot, proc_val_repr)
+        proc_visit_flag = CompilationFlag(0, desired_destination=proc_slot)
+        proc_val_repr = self.visit(w_proc, proc_visit_flag)
+        self.set_frame_slot(proc_slot, proc_val_repr) # could be no-op
 
         for i in xrange(len(lst)):
             # since enumerate is not supported in RPython...
             w_expr = lst[i]
-            arg_val_repr = self.visit(w_expr)
-            self.set_frame_slot(arg_slots[i], arg_val_repr)
+            dest_slot = arg_slots[i]
+            arg_visit_flag = CompilationFlag(0, desired_destination=dest_slot)
+            arg_val_repr = self.visit(w_expr, arg_visit_flag)
+            self.set_frame_slot(dest_slot, arg_val_repr)
 
-        # cal; and return
-        result_value_repr = FrameValueRepr(self.new_frame_slot())
+        if flag.has_dest():
+            result_value_repr = flag.get_dest()
+        else:
+            result_value_repr = FrameValueRepr(self.alloc_frame_slot())
+        # call and return
         if flag.has_tco():
             self.emit(TailCall(result_value_repr.to_index(),
                     proc_slot.to_index(), len(lst)))
@@ -416,17 +432,17 @@ class SkeletonWalker(Walker):
         if value_repr.on_frame():
             return value_repr
         elif value_repr.is_const():
-            res = FrameValueRepr(self.new_frame_slot())
+            res = FrameValueRepr(self.alloc_frame_slot())
             instr = LoadConst(res.to_index(), value_repr.to_index())
             self.emit(instr)
             return res
         elif value_repr.is_cell():
-            res = FrameValueRepr(self.new_frame_slot())
+            res = FrameValueRepr(self.alloc_frame_slot())
             instr = LoadCell(res.to_index(), value_repr.to_index())
             self.emit(instr)
             return res
         elif value_repr.is_global():
-            res = FrameValueRepr(self.new_frame_slot())
+            res = FrameValueRepr(self.alloc_frame_slot())
             instr = LoadGlobal(res.to_index(),
                     self.new_const_slot(value_repr.w_symbol))
             self.emit(instr)
@@ -437,6 +453,8 @@ class SkeletonWalker(Walker):
     @dont_look_inside
     def set_frame_slot(self, old_repr, new_repr):
         assert old_repr.on_frame()
+        if old_repr is new_repr:
+            return # moving self to self: ignored
         if new_repr.on_frame():
             self.emit(MoveLocal(old_repr.to_index(), new_repr.to_index()))
         elif new_repr.is_cell():
@@ -451,11 +469,15 @@ class SkeletonWalker(Walker):
 
     def set_cell_value(self, cell_repr, new_repr):
         assert cell_repr.is_cell()
+        if cell_repr is new_repr:
+            return # well...
         self.emit(StoreCell(cell_repr.to_index(),
             self.cast_to_local(new_repr).to_index()))
 
     def set_global_value(self, global_repr, new_repr):
         assert global_repr.is_global()
+        if global_repr is new_repr:
+            return # well...
         self.emit(StoreGlobal(self.new_const_slot(global_repr.w_symbol),
             self.cast_to_local(new_repr).to_index()))
 
@@ -478,6 +500,9 @@ class IntermediateRepr(object):
     def is_global(self):
         return False
 
+    def is_assignable(self):
+        return False
+
 class FrameValueRepr(IntermediateRepr):
     """ A value that is on stack.
     """
@@ -488,6 +513,9 @@ class FrameValueRepr(IntermediateRepr):
         return self.slotindex
 
     def on_frame(self):
+        return True
+
+    def is_assignable(self):
         return True
 
 class ConstValueRepr(IntermediateRepr):
@@ -512,12 +540,18 @@ class CellValueRepr(IntermediateRepr):
     def is_cell(self):
         return True
 
+    def is_assignable(self):
+        return True
+
 class GlobalValueRepr(IntermediateRepr):
     def __init__(self, w_symbol):
         assert w_symbol.is_symbol()
         self.w_symbol = w_symbol
 
     def is_global(self):
+        return True
+
+    def is_assignable(self):
         return True
 
 class DeferredLambdaCompilation(object):
@@ -553,13 +587,13 @@ class DeferredLambdaCompilation(object):
 
         # fill in the frame slots using those arguments
         for w_argname in arg_list:
-            frame_slot_repr = FrameValueRepr(lambda_walker.new_frame_slot())
+            frame_slot_repr = FrameValueRepr(lambda_walker.alloc_frame_slot())
             lambda_walker.local_variables[w_argname.to_string()] \
                     = frame_slot_repr
 
         # if vararg
         if lambda_walker.varargs_p:
-            frame_slot_repr = FrameValueRepr(lambda_walker.new_frame_slot())
+            frame_slot_repr = FrameValueRepr(lambda_walker.alloc_frame_slot())
             lambda_walker.local_variables[w_rest.to_string()] \
                     = frame_slot_repr
 

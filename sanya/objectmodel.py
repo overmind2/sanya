@@ -67,6 +67,11 @@ class W_Root(object):
         """
         raise NotImplementedError
 
+    def accept_cps_transformer(self, walker, flag):
+        """ @see sanya.transform.CPSWalker
+        """
+        raise NotImplementedError
+
     def __repr__(self):
         """NOT_RPYTHON"""
         return self.to_string()
@@ -99,6 +104,10 @@ class W_Symbol(W_Root):
     def accept_compiler_walker(self, walker, flag):
         return walker.local_lookup(self)
 
+    def accept_cps_transformer(self, walker, flag):
+        return walker.make_identical_cont(self)
+
+
 def make_symbol(sval):
     """ Use this to get a w_symbol instance.
     """
@@ -129,6 +138,9 @@ class W_Fixnum(W_Root):
 
     def accept_compiler_walker(self, walker, flag):
         return walker.visit_fixnum_const(self)
+
+    def accept_cps_transformer(self, walker, flag):
+        return walker.make_identical_cont(self)
 
 class W_Pair(W_Root):
     """ Mutable data structure. It's particular important in scheme
@@ -175,6 +187,19 @@ class W_Pair(W_Root):
         # apply the procedure against the arguments
         return walker.visit_application(w_proc, w_args, flag)
 
+    def accept_cps_transformer(self, walker, flag):
+        lis = []
+        w_rest = scmlist2py(self, lis)
+        assert w_rest.is_null()
+
+        transformed_lis = [None] * len(lis)
+        for i in xrange(len(lis)): # RPython plz give me enumerate...
+            w_item = lis[i]
+            transformed_lis[i] = walker.visit(w_item)
+
+        w_proc = transformed_lis[0]
+        args_list = transformed_lis[1:]
+        return walker.transform_application(w_proc, args_list)
 
 class W_Nil(W_Root):
     """ Use w_nil to access this singleton instance.

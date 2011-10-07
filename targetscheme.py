@@ -21,24 +21,22 @@ def jitpolicy(driver):
     from pypy.jit.codewriter.policy import JitPolicy
     return JitPolicy()
 
-def stream_to_skeleton(stream):
+def filename_to_expr_list(filename):
+    stream = open_file_as_stream(filename, 'r')
     content = stream.readall()
     expr_list = parse_string(content)
-    return compile_list_of_expr(expr_list)
+    stream.close()
+    return expr_list
 
 def run_file(filename):
-    file_stream = open_file_as_stream(filename, 'r')
     vm = VM()
     open_lib(vm)
-    vm.bootstrap(stream_to_skeleton(file_stream))
-    file_stream.close()
+    vm.bootstrap(compile_list_of_expr(filename_to_expr_list(filename)))
     vm.run()
 
 def disassemble_file(filename):
     """NOT_RPYTHON"""
-    stream = open_file_as_stream(filename, 'r')
-    print stream_to_skeleton(stream)
-    stream.close()
+    print compile_list_of_expr(filename_to_expr_list(filename))
 
 def generate_header(filename):
     """NOT_RPYTHON"""
@@ -57,9 +55,7 @@ def generate_header(filename):
 
 def compile_file(filename, outfname):
     """maybe rpython..."""
-    stream = open_file_as_stream(filename, 'r')
-    w_skel = stream_to_skeleton(stream)
-    stream.close()
+    w_skel = compile_list_of_expr(filename_to_expr_list(filename))
 
     outf = open_file_as_stream(outfname, 'w')
     chunkio.dump(w_skel, outf)
@@ -129,6 +125,7 @@ def entry_point(argv):
         run_file(argv[1])
         return 0
     else:
+        # more utilties for both RPython and CPython
         op = argv[1]
         fname = argv[2]
         if op == '-c': # compile the code and dump to another file
@@ -152,6 +149,11 @@ def entry_point(argv):
             w_skel = chunkio.load(stream)
             stream.close()
             print w_skel
+        elif op == '-t': # do cps transform
+            from sanya.transform import transform_list_of_expr
+            expr_list = filename_to_expr_list(fname)
+            print transform_list_of_expr(expr_list)
+
         else:
             print 'what do you want to do?'
         return
