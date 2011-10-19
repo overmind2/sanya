@@ -85,6 +85,8 @@ class VM(object):
         self.cellval_head = CellValueNode(None, None, None)
         self.cellval_head.nextnode = self.cellval_head
         self.cellval_head.prevnode = self.cellval_head
+
+        # contains all closure skeletons. @see compilation.SkeletonWalker
         self.skeleton_registry = []
 
     def new_frame(self, size):
