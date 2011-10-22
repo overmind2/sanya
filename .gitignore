@@ -2,3 +2,4 @@ c-*
 .*.swp
 *.pyc
 *.out
+*.o
