@@ -1,17 +1,26 @@
 
-#include "sanya_obj.h"
+#include "sanya_object.h"
 
 sanya_t_Object *
-sanya_r_create_fixnum(intptr_t ival)
+sanya_r_W_Nil()
 {
-    sanya_t_Object *self = malloc(sizeof(sanya_t_Object));
-    self->type = SANYA_T_FIXNUM;
-    self->as_fixnum = ival;
-    return self;
+    return (sanya_t_Object *)SANYA_T_NIL;
 }
 
 sanya_t_Object *
-sanya_r_create_symbol(char *sval)
+sanya_r_W_Unspecified()
+{
+    return (sanya_t_Object *)SANYA_T_UNSPEC;
+}
+
+sanya_t_Object *
+sanya_r_W_Fixnum(intptr_t ival)
+{
+    return (sanya_t_Object *)((ival << SANYA_R_TAGWIDTH) | SANYA_T_FIXNUM);
+}
+
+sanya_t_Object *
+sanya_r_W_Symbol(char *sval)
 {
     sanya_t_Object *self = malloc(sizeof(sanya_t_Object));
     self->type = SANYA_T_SYMBOL;
@@ -20,7 +29,7 @@ sanya_r_create_symbol(char *sval)
 }
 
 sanya_t_Object *
-sanya_r_create_pair(intptr_t car, intptr_t cdr)
+sanya_r_W_Pair(intptr_t car, intptr_t cdr)
 {
     sanya_t_Object *self = malloc(sizeof(sanya_t_Object));
     self->type = SANYA_T_PAIR;
@@ -30,12 +39,35 @@ sanya_r_create_pair(intptr_t car, intptr_t cdr)
 }
 
 sanya_t_Object *
-sanya_r_create_closure(intptr_t skeleton, intptr_t cell_values)
+sanya_r_W_Closure(sanya_t_ClosureSkeleton *skeleton,
+                  sanya_t_CellValue **cell_values)
 {
     sanya_t_Object *self = malloc(sizeof(sanya_t_Object));
     self->type = SANYA_T_CLOSURE;
-    self->as_closure.skeleton = (sanya_t_ClosureSkeleton *)skeleton;
-    self->as_closure.cell_values = (sanya_t_CellValue **)cell_values;
+    self->as_closure.skeleton = skeleton;
+    self->as_closure.cell_values = cell_values;
     return self;
+}
+
+intptr_t
+sanya_r_W_Object_Type(sanya_t_Object *self)
+{
+    intptr_t type;
+    if ((type = (intptr_t)self & SANYA_R_TAGMASK))
+        return type;
+    else
+        return self->type;
+}
+
+intptr_t
+sanya_r_W_Object_Nullp(sanya_t_Object *self)
+{
+    return sanya_r_W_Object_Type(self) == SANYA_T_NIL;
+}
+
+intptr_t
+sanya_r_W_Fixnum_Unwrap(sanya_t_Object *self)
+{
+    return (intptr_t)self >> SANYA_R_TAGWIDTH;
 }
 
