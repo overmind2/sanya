@@ -6,6 +6,16 @@
 
     - Eliminate global hash table and replace it with an array.
     - Emit code for initializing skeleton table and global_variables.
+
+    - Inline LoadConst for primitive types(fixnums, unspec, nil, ...)
+    - Inline arg count checks.
+    - Most of the copy propagation is done by gcc but be aware of
+      jump-and-return, which has a big penalty (~10% in fibonacii!)
+
+    - global lookup is still more expensive than locals (fei hua!)
+      but lookup is usually not that expensive (5% in fibo.)
+      prelude procedure calls is expensive (total 18% in fibo, for + and <)
+      consider inline prelude procedures?
 """
 
 class LowLevelInsn(object):
@@ -75,8 +85,13 @@ class StoreGlobal(LowLevelInsn):
         self.src = src
 
     def to_c(self, skel, lir_walker):
-        return 'sanya_g_global_variable_%d = v_%d;' % (
-                self.gtable_index, self.src)
+        name = lir_walker.gid_to_name[self.gtable_index].to_string()
+        if name in LoadGlobal.prelude_table:
+            return 'sanya_g_prelude_%s = v_%d;' % (
+                    LoadGlobal.prelude_table[name], self.src)
+        else:
+            return 'sanya_g_global_variable_%d = v_%d;' % (
+                    self.gtable_index, self.src)
 
 class StoreCell(LowLevelInsn):
     def __init__(self, cell_index, src):

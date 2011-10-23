@@ -109,9 +109,7 @@ class CodeGenerator(object):
         self.emit('}')
 
     def emit_global_decl(self):
-        self.emit('#include "sanya_runtime.h"')
-        self.emit('#include "sanya_object.h"')
-        self.emit('#include "sanya_prelude.h"')
+        self.emit('#include "func_decl.h"')
         self.emit('')
         self.emit('// Globals')
         for i in xrange(len(self.walker.global_variable_list)):

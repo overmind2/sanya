@@ -1,3 +1,4 @@
+#include "func_decl.h"
 
 // Runtime
 
@@ -20,15 +21,6 @@ sanya_r_escape_cell_values(sanya_t_CellValue **cell_list, intptr_t length)
         iter->escaped_value = *(iter->ref);
         iter->ref = &(iter->escaped_value);
     }
-}
-
-intptr_t
-sanya_r_to_boolean(sanya_t_Object *self)
-{
-    if (self == sanya_r_W_Boolean(0))
-        return 0;
-    else
-        return 1;
 }
 
 // @see sanya/closure.py - W_Skeleton.build_closure
@@ -64,33 +56,6 @@ sanya_r_halt()
 }
 
 // Object
-
-sanya_t_Object *
-sanya_r_W_Nil()
-{
-    return (sanya_t_Object *)SANYA_T_NIL;
-}
-
-sanya_t_Object *
-sanya_r_W_Unspecified()
-{
-    return (sanya_t_Object *)SANYA_T_UNSPEC;
-}
-
-sanya_t_Object *
-sanya_r_W_Boolean(intptr_t bval)
-{
-    if (bval)
-        return (sanya_t_Object *)(1 << SANYA_R_TAGWIDTH | SANYA_T_BOOLEAN);
-    else
-        return (sanya_t_Object *)(0 << SANYA_R_TAGWIDTH | SANYA_T_BOOLEAN);
-}
-
-sanya_t_Object *
-sanya_r_W_Fixnum(intptr_t ival)
-{
-    return (sanya_t_Object *)((ival << SANYA_R_TAGWIDTH) | SANYA_T_FIXNUM);
-}
 
 sanya_t_Object *
 sanya_r_W_Symbol(const char *sval)
@@ -136,12 +101,6 @@ intptr_t
 sanya_r_W_Object_Nullp(sanya_t_Object *self)
 {
     return sanya_r_W_Object_Type(self) == SANYA_T_NIL;
-}
-
-intptr_t
-sanya_r_W_Fixnum_Unwrap(sanya_t_Object *self)
-{
-    return (intptr_t)self >> SANYA_R_TAGWIDTH;
 }
 
 // Prelude

@@ -1,19 +1,23 @@
-(define (make-counter)
-  (define c 1)
-  (lambda ()
-    (set! c (+ c 1))
-    c))
+(define (cons a b)
+  (lambda (f)
+    (f a b)))
+
+(define (car c)
+  (c (lambda (a b)
+       a)))
+
+(define (cdr c)
+  (c (lambda (a b)
+       b)))
 
 (define (fibo n)
   (if (< n 2) n
     (+ (fibo (+ n -1))
        (fibo (+ n -2)))))
 
-(define (print x)
-  (display x)
-  (newline))
+(display (car (cons 1 2)))
+(newline)
 
-(define (main)
-  (print (fibo 30)))
+(display (fibo 38))
+(newline)
 
-(main)

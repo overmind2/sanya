@@ -36,23 +36,29 @@
     } while (0)
 
 // Runtime
-inline void sanya_r_check_nb_args(sanya_t_Object *clos, intptr_t nb_args);
+//static inline void sanya_r_check_nb_args(sanya_t_Object *clos, intptr_t nb_args);
 sanya_t_CellValue *sanya_r_build_cell_value(intptr_t *ref);
 void sanya_r_escape_cell_values(sanya_t_CellValue **cell_list,
                                 intptr_t length);
 sanya_t_Object *sanya_r_build_closure(sanya_t_ClosureSkeleton *skel,
                                       sanya_t_CellValue **cell_values,
                                       sanya_t_CellValue **fresh_cells);
-intptr_t sanya_r_to_boolean(sanya_t_Object *self);
+//static inline intptr_t sanya_r_to_boolean(sanya_t_Object *self);
 
 void sanya_r_halt();
 void sanya_r_bootstrap();  // defined in main.c instead.
 
 // Object
-sanya_t_Object *sanya_r_W_Nil();
-sanya_t_Object *sanya_r_W_Unspecified();
-sanya_t_Object *sanya_r_W_Boolean(intptr_t bval);
-sanya_t_Object *sanya_r_W_Fixnum(intptr_t ival);
+#define sanya_r_W_Nil() ((sanya_t_Object *)SANYA_T_NIL)
+#define sanya_r_W_Unspecified() ((sanya_t_Object *)SANYA_T_UNSPEC)
+#define sanya_r_W_Boolean(bval) \
+    ((bval) ? \
+        (sanya_t_Object *)(1 << SANYA_R_TAGWIDTH | SANYA_T_BOOLEAN) \
+           : \
+        (sanya_t_Object *)(0 << SANYA_R_TAGWIDTH | SANYA_T_BOOLEAN))
+#define sanya_r_W_Fixnum(ival) \
+    (sanya_t_Object *)(((ival) << SANYA_R_TAGWIDTH) | SANYA_T_FIXNUM)
+
 sanya_t_Object *sanya_r_W_Symbol(const char *sval);
 sanya_t_Object *sanya_r_W_Pair(intptr_t car, intptr_t cdr);
 sanya_t_Object *sanya_r_W_Closure(sanya_t_ClosureSkeleton *skeleton,
@@ -60,7 +66,8 @@ sanya_t_Object *sanya_r_W_Closure(sanya_t_ClosureSkeleton *skeleton,
 
 intptr_t sanya_r_W_Object_Type(sanya_t_Object *self);
 intptr_t sanya_r_W_Object_Nullp(sanya_t_Object *self);
-intptr_t sanya_r_W_Fixnum_Unwrap(sanya_t_Object *self);
+#define sanya_r_W_Fixnum_Unwrap(self) \
+    ((intptr_t)(self) >> SANYA_R_TAGWIDTH)
 
 // Prelude
 void sanya_r_initialize_prelude();
@@ -72,16 +79,26 @@ extern intptr_t sanya_g_prelude_num_eq;
 
 // Inlines
 
-inline void
-sanya_r_check_nb_args(sanya_t_Object *clos, intptr_t nb_args)
+#define sanya_r_check_nb_args(clos, nb_args_ck) \
+    do { \
+        sanya_t_ClosureSkeleton *skel = (clos)->as_closure.skeleton; \
+        if (skel->nb_args != nb_args_ck) { \
+            fprintf(stderr, "ERROR: closure %s called with wrong number" \
+                    " of argument.\n", skel->name); \
+            fprintf(stderr, " -- requires %ld arguments, got %d.\n", \
+                    skel->nb_args, nb_args_ck); \
+            exit(1); \
+        } \
+    } while (0)
+
+static inline intptr_t 
+xsanya_r_to_boolean(sanya_t_Object *self)
 {
-    sanya_t_ClosureSkeleton *skel = clos->as_closure.skeleton;
-    if (skel->nb_args != nb_args) {
-        fprintf(stderr, "ERROR: closure %s called with wrong number"
-                " of argument.\n", skel->name);
-        fprintf(stderr, " -- requires %ld arguments, got %ld.\n",
-                skel->nb_args, nb_args);
-        exit(1);
-    }
+    if (self == sanya_r_W_Boolean(0))
+        return 0;
+    else
+        return 1;
 }
+
+#define sanya_r_to_boolean(self) ((self) != sanya_r_W_Boolean(0))
 
