@@ -3,10 +3,10 @@
 # handler_namespaces: ['root', handler.gcc]
 
 gcc_CC=gcc
-gcc_CFLAGS=-ggdb3 -O0 -Wall -Winline -Wwrite-strings  \
+gcc_CFLAGS=-flto -ggdb3 -O0 -Wall -Winline -Wwrite-strings  \
 	    -Wno-unused -c
 gcc_INCLUDES=-I./sanya_rt
-gcc_LDFLAGS=-O0 -flto -ggdb3
+gcc_LDFLAGS=-O0 -flto -fwhole-program -ggdb3 -lgc
 gcc_TARGET=c-scheme2c-test
 
 all : $(gcc_TARGET)

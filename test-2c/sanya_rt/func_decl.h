@@ -12,7 +12,6 @@ extern sanya_t_TrampolineBuf sanya_g_trampoline_buf;
 
 #define SANYA_R_CHECK_TRAMPOLINE(retval) \
     while (!sanya_g_trampoline_buf.is_done) { \
-        sanya_g_trampoline_buf.is_done = 1; \
         sanya_t_Object *call = (sanya_t_Object *)sanya_g_trampoline_buf.closure; \
         sanya_r_check_nb_args(call, sanya_g_trampoline_buf.argc); \
         switch (sanya_g_trampoline_buf.argc) { \
@@ -142,7 +141,7 @@ extern sanya_t_TrampolineBuf sanya_g_trampoline_buf;
     do { \
         sanya_g_trampoline_buf.is_done = 0; \
         sanya_g_trampoline_buf.closure = closure_; \
-        sanya_g_trampoline_buf.argc = 2; \
+        sanya_g_trampoline_buf.argc = 3; \
         sanya_g_trampoline_buf.argv[0] = arg1; \
         sanya_g_trampoline_buf.argv[1] = arg2; \
         sanya_g_trampoline_buf.argv[2] = arg3; \
@@ -153,7 +152,7 @@ extern sanya_t_TrampolineBuf sanya_g_trampoline_buf;
     do { \
         sanya_g_trampoline_buf.is_done = 0; \
         sanya_g_trampoline_buf.closure = closure_; \
-        sanya_g_trampoline_buf.argc = 2; \
+        sanya_g_trampoline_buf.argc = 4; \
         sanya_g_trampoline_buf.argv[0] = arg1; \
         sanya_g_trampoline_buf.argv[1] = arg2; \
         sanya_g_trampoline_buf.argv[2] = arg3; \
@@ -189,6 +188,9 @@ sanya_t_Object *sanya_r_W_Pair(intptr_t car, intptr_t cdr);
 sanya_t_Object *sanya_r_W_Closure(sanya_t_ClosureSkeleton *skeleton,
                                   sanya_t_CellValue **cell_values);
 
+// Reversed: (3, nil, a, b, c) -> (c b a)
+sanya_t_Object *sanya_r_W_List(intptr_t length, sanya_t_Object *last, ...);
+
 intptr_t sanya_r_W_Object_Type(sanya_t_Object *self);
 intptr_t sanya_r_W_Object_Nullp(sanya_t_Object *self);
 #define sanya_r_W_Fixnum_Unwrap(self) \
@@ -198,13 +200,25 @@ intptr_t sanya_r_W_Object_Nullp(sanya_t_Object *self);
 void sanya_r_initialize_prelude();
 extern intptr_t sanya_g_prelude_display;
 extern intptr_t sanya_g_prelude_newline;
+
 extern intptr_t sanya_g_prelude_add;
 extern intptr_t sanya_g_prelude_minus;
 extern intptr_t sanya_g_prelude_lessthan;
 extern intptr_t sanya_g_prelude_num_eq;
+extern intptr_t sanya_g_prelude_integerp;
+
 extern intptr_t sanya_g_prelude_cons;
 extern intptr_t sanya_g_prelude_car;
 extern intptr_t sanya_g_prelude_cdr;
+extern intptr_t sanya_g_prelude_setcar;
+extern intptr_t sanya_g_prelude_setcdr;
+extern intptr_t sanya_g_prelude_pairp;
+
+extern intptr_t sanya_g_prelude_nullp;
+extern intptr_t sanya_g_prelude_symbolp;
+extern intptr_t sanya_g_prelude_procedurep;
+
+extern intptr_t sanya_g_prelude_callec;
 
 // Inlines
 
@@ -212,10 +226,11 @@ extern intptr_t sanya_g_prelude_cdr;
     do { \
         sanya_t_ClosureSkeleton *skel = (clos)->as_closure.skeleton; \
         if (skel->nb_args != nb_args_ck) { \
-            fprintf(stderr, "ERROR: closure %s called with wrong number" \
+            fprintf(stderr, "ERROR -- closure %s called with wrong number" \
                     " of argument.\n", skel->name); \
-            fprintf(stderr, " -- requires %ld arguments, got %ld.\n", \
-                    skel->nb_args, (intptr_t)nb_args_ck); \
+            fprintf(stderr, "      .. it requires %ld arguments, " \
+                    "but got %ld instead.\n", skel->nb_args, \
+                    (intptr_t)nb_args_ck); \
             exit(1); \
         } \
     } while (0)

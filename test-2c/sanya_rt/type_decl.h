@@ -29,7 +29,10 @@ struct sanya_t_Object_ {
         } as_pair;
         struct {
             sanya_t_ClosureSkeleton *skeleton;
-            sanya_t_CellValue **cell_values;
+            union {
+                sanya_t_CellValue **cell_values;
+                void *aux;
+            };
         } as_closure;
     };
 };

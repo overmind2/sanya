@@ -38,15 +38,25 @@ class MoveLocal(LowLevelInsn):
 class LoadGlobal(LowLevelInsn):
     # keep this table in sync with sanya_prelude.h
     prelude_table = {
-        '+': 'add',
-        '-': 'minus',
         'display': 'display',
         'newline': 'newline',
+        '+': 'add',
+        '-': 'minus',
         '<': 'lessthan',
         '=': 'num_eq',
+        'integer?': 'integerp',
+
         'cons': 'cons',
         'car': 'car',
         'cdr': 'cdr',
+        'set-car!': 'setcar',
+        'set-cdr!': 'setcdr',
+        'pair?': 'pairp',
+
+        'symbol?': 'symbolp',
+        'null?': 'nullp',
+        'procedure?': 'procedurep',
+        'call/ec': 'callec',
     }
     def __init__(self, dest, gtable_index):
         self.dest = dest

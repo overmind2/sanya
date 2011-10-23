@@ -122,7 +122,7 @@ class SexprWalker(object):
             return self.local_lookup(w_object)
         if w_object.is_pair():
             return self.visit_pair(w_object, tail)
-        if w_object.is_nil():
+        if w_object.is_null():
             raise TypeError, 'nil visited'
         if w_object.is_boolean():
             return ConstValueRepr(self.new_const_slot(w_object))

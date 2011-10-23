@@ -2,6 +2,7 @@
 from cStringIO import StringIO
 import hir
 import lir
+from sanya.objectmodel import scmlist2py
 
 def compile_from_hir_walker(hir_walker):
     llw = LowLevelWalker(hir_walker)
@@ -47,24 +48,13 @@ class CodeGenerator(object):
         for i, skel in enumerate(self.walker.skel_table):
             skel_name = 'sanya_g_skeleton_%d' % i
             self.emit('%s.name = "%s";' % (skel_name, skel.name))
-            self.emit('%s.consts = malloc(sizeof(intptr_t) * %d);' % (
+            self.emit('%s.consts = GC_MALLOC(sizeof(intptr_t) * %d);' % (
                 skel_name, len(skel.consts)))
             # consts.
             for nth_const, const_val in enumerate(skel.consts):
-                if const_val.is_fixnum():
-                    self.emit('%s.consts[%d] = sanya_r_W_Fixnum(%d);' % (
-                        skel_name, nth_const, const_val.ival))
-                elif const_val.is_symbol():
-                    self.emit('%s.consts[%d] = sanya_r_W_Symbol("%s");' % (
-                        skel_name, nth_const, const_val.sval))
-                elif const_val.is_unspecified():
-                    self.emit('%s.consts[%d] = sanya_r_W_Unspecified();' % (
-                        skel_name, nth_const))
-                elif const_val.is_null():
-                    self.emit('%s.consts[%d] = sanya_r_W_Nil();' % (
-                        skel_name, nth_const))
-                else:
-                    raise ValueError('unsupported %s' % const_val)
+                self.emit('%s.consts[%d] = %s;' % (
+                    skel_name, nth_const, self.obj2c(const_val)))
+
             # cell_recipt, initialized in global section
             self.emit('%s.cell_recipt = sanya_g_skeleton_cell_recipt_%d;' % (
                 skel_name, i))
@@ -81,27 +71,35 @@ class CodeGenerator(object):
         # dont forget about toplevel..
         skel = self.walker.toplevel_skel
         consts_name = 'sanya_g_toplevel_consts'
-        self.emit('%s = malloc(sizeof(intptr_t) * %d);' % (
+        self.emit('%s = GC_MALLOC(sizeof(intptr_t) * %d);' % (
             consts_name, len(skel.consts)))
         # consts.
         for nth_const, const_val in enumerate(skel.consts):
-            if const_val.is_fixnum():
-                self.emit('%s[%d] = sanya_r_W_Fixnum(%d);' % (
-                    consts_name, nth_const, const_val.ival))
-            elif const_val.is_symbol():
-                self.emit('%s[%d] = sanya_r_W_Symbol("%s");' % (
-                    consts_name, nth_const, const_val.sval))
-            elif const_val.is_unspecified():
-                self.emit('%s[%d] = sanya_r_W_Unspecified();' % (
-                    consts_name, nth_const))
-            elif const_val.is_null():
-                self.emit('%s[%d] = sanya_r_W_Nil();' % (
-                    consts_name, nth_const))
-            else:
-                raise ValueError('unsupported %s' % const_val)
+            self.emit('%s[%d] = %s;' % (consts_name, nth_const,
+                self.obj2c(const_val)))
 
         self.dedent()
         self.emit('}')
+
+    def obj2c(self, obj):
+        if obj.is_boolean():
+            return 'sanya_r_W_Boolean(%d)' % obj.to_bool()
+        elif obj.is_fixnum():
+            return 'sanya_r_W_Fixnum(%d)' % obj.ival
+        elif obj.is_symbol():
+            return 'sanya_r_W_Symbol("%s")' % obj.sval
+        elif obj.is_unspecified():
+            return 'sanya_r_W_Unspecified()'
+        elif obj.is_null():
+            return 'sanya_r_W_Nil()'
+        elif obj.is_pair():
+            lis = []
+            rest = scmlist2py(obj, lis)
+            return 'sanya_r_W_List(%d, %s, %s)' % (len(lis),
+                    self.obj2c(rest),
+                    ', '.join(self.obj2c(o) for o in reversed(lis)))
+        else:
+            raise ValueError('unsupported literal for c: %s' % obj)
 
     def emit_main_func(self):
         self.emit('')
@@ -117,6 +115,7 @@ class CodeGenerator(object):
         self.emit('}')
 
     def emit_global_decl(self):
+        self.emit('#include <gc.h>')
         self.emit('#include "func_decl.h"')
         self.emit('')
         self.emit('// Globals')

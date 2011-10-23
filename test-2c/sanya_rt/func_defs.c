@@ -1,3 +1,6 @@
+#include <string.h>
+#include <gc.h>
+#include <setjmp.h>
 #include "func_decl.h"
 
 // Runtime
@@ -6,7 +9,7 @@
 sanya_t_CellValue *
 sanya_r_build_cell_value(intptr_t *ref)
 {
-    sanya_t_CellValue *self = malloc(sizeof(sanya_t_CellValue));
+    sanya_t_CellValue *self = GC_MALLOC(sizeof(sanya_t_CellValue));
     self->ref = ref;
     return self;
 }
@@ -30,7 +33,7 @@ sanya_t_Object *sanya_r_build_closure(sanya_t_ClosureSkeleton *skel,
 {
     intptr_t i, recipt, fresh_p, real_index;
     sanya_t_CellValue **new_cell_values =
-        malloc(sizeof(sanya_t_CellValue *) * skel->nb_cells);
+        GC_MALLOC(sizeof(sanya_t_CellValue *) * skel->nb_cells);
 
     for (i = 0; i < skel->nb_cells; ++i) {
         recipt = skel->cell_recipt[i];
@@ -60,16 +63,19 @@ sanya_r_halt()
 sanya_t_Object *
 sanya_r_W_Symbol(const char *sval)
 {
-    sanya_t_Object *self = malloc(sizeof(sanya_t_Object));
+    sanya_t_Object *self = GC_MALLOC(sizeof(sanya_t_Object));
+    int len = strlen(sval);
+    char *cpy = GC_MALLOC(len + 1);
+    memcpy(cpy, sval, len + 1);
     self->type = SANYA_T_SYMBOL;
-    self->as_symbol = sval;
+    self->as_symbol = cpy;
     return self;
 }
 
 sanya_t_Object *
 sanya_r_W_Pair(intptr_t car, intptr_t cdr)
 {
-    sanya_t_Object *self = malloc(sizeof(sanya_t_Object));
+    sanya_t_Object *self = GC_MALLOC(sizeof(sanya_t_Object));
     self->type = SANYA_T_PAIR;
     self->as_pair.car = (sanya_t_Object *)car;
     self->as_pair.cdr = (sanya_t_Object *)cdr;
@@ -80,11 +86,28 @@ sanya_t_Object *
 sanya_r_W_Closure(sanya_t_ClosureSkeleton *skeleton,
                   sanya_t_CellValue **cell_values)
 {
-    sanya_t_Object *self = malloc(sizeof(sanya_t_Object));
+    sanya_t_Object *self = GC_MALLOC(sizeof(sanya_t_Object));
     self->type = SANYA_T_CLOSURE;
     self->as_closure.skeleton = skeleton;
     self->as_closure.cell_values = cell_values;
     return self;
+}
+
+sanya_t_Object *
+sanya_r_W_List(intptr_t length, sanya_t_Object *last, ...)
+{
+    intptr_t i;
+    sanya_t_Object *arg;
+    va_list args;
+    va_start(args, last);
+
+    for (i = 0; i < length; ++i) {
+        arg = va_arg(args, sanya_t_Object *);
+        last = sanya_r_W_Pair(arg, last);
+    }
+
+    va_end(args);
+    return last;
 }
 
 intptr_t
@@ -106,23 +129,49 @@ sanya_r_W_Object_Nullp(sanya_t_Object *self)
 // Prelude
 intptr_t sanya_g_prelude_display;
 intptr_t sanya_g_prelude_newline;
+
 intptr_t sanya_g_prelude_add;
 intptr_t sanya_g_prelude_minus;
 intptr_t sanya_g_prelude_lessthan;
 intptr_t sanya_g_prelude_num_eq;
+intptr_t sanya_g_prelude_integerp;
+
 intptr_t sanya_g_prelude_cons;
 intptr_t sanya_g_prelude_car;
 intptr_t sanya_g_prelude_cdr;
+intptr_t sanya_g_prelude_setcar;
+intptr_t sanya_g_prelude_setcdr;
+intptr_t sanya_g_prelude_pairp;
 
+intptr_t sanya_g_prelude_nullp;
+intptr_t sanya_g_prelude_symbolp;
+intptr_t sanya_g_prelude_procedurep;
+
+intptr_t sanya_g_prelude_callec;
+
+// prelude closure skeletons, to be initialized.
 static sanya_t_ClosureSkeleton sanya_g_prelude_display_skel;
 static sanya_t_ClosureSkeleton sanya_g_prelude_newline_skel;
+
 static sanya_t_ClosureSkeleton sanya_g_prelude_add_skel;
 static sanya_t_ClosureSkeleton sanya_g_prelude_minus_skel;
 static sanya_t_ClosureSkeleton sanya_g_prelude_lessthan_skel;
 static sanya_t_ClosureSkeleton sanya_g_prelude_num_eq_skel;
+static sanya_t_ClosureSkeleton sanya_g_prelude_integerp_skel;
+
 static sanya_t_ClosureSkeleton sanya_g_prelude_cons_skel;
 static sanya_t_ClosureSkeleton sanya_g_prelude_car_skel;
 static sanya_t_ClosureSkeleton sanya_g_prelude_cdr_skel;
+static sanya_t_ClosureSkeleton sanya_g_prelude_setcar_skel;
+static sanya_t_ClosureSkeleton sanya_g_prelude_setcdr_skel;
+static sanya_t_ClosureSkeleton sanya_g_prelude_pairp_skel;
+
+static sanya_t_ClosureSkeleton sanya_g_prelude_nullp_skel;
+static sanya_t_ClosureSkeleton sanya_g_prelude_symbolp_skel;
+static sanya_t_ClosureSkeleton sanya_g_prelude_procedurep_skel;
+
+static sanya_t_ClosureSkeleton sanya_g_prelude_callec_skel;
+static sanya_t_ClosureSkeleton sanya_g_prelude_resume_callec_skel;
 
 static intptr_t
 display(sanya_t_Object *ls_closure, intptr_t arg1)
@@ -212,6 +261,13 @@ num_eq(sanya_t_Object *ls_closure,
 }
 
 static sanya_t_Object *
+integerp(sanya_t_Object *ls_closure, sanya_t_Object *arg1)
+{
+    SANYA_R_RETURN_VALUE(sanya_r_W_Boolean(
+                sanya_r_W_Object_Type(arg1) == SANYA_T_FIXNUM));
+}
+
+static sanya_t_Object *
 cons(sanya_t_Object *ls_closure, sanya_t_Object *arg1, sanya_t_Object *arg2)
 {
     SANYA_R_RETURN_VALUE(sanya_r_W_Pair(arg1, arg2));
@@ -227,6 +283,81 @@ static sanya_t_Object *
 cdr(sanya_t_Object *ls_closure, sanya_t_Object *arg1)
 {
     SANYA_R_RETURN_VALUE(arg1->as_pair.cdr);
+}
+
+static sanya_t_Object *
+setcar(sanya_t_Object *ls_closure, sanya_t_Object *arg1, sanya_t_Object *arg2)
+{
+    arg1->as_pair.car = arg2;
+    SANYA_R_RETURN_VALUE((intptr_t)sanya_r_W_Unspecified());
+}
+
+static sanya_t_Object *
+setcdr(sanya_t_Object *ls_closure, sanya_t_Object *arg1, sanya_t_Object *arg2)
+{
+    arg1->as_pair.cdr = arg2;
+    SANYA_R_RETURN_VALUE((intptr_t)sanya_r_W_Unspecified());
+}
+
+static sanya_t_Object *
+pairp(sanya_t_Object *ls_closure, sanya_t_Object *arg1)
+{
+    SANYA_R_RETURN_VALUE(sanya_r_W_Boolean(
+                sanya_r_W_Object_Type(arg1) == SANYA_T_PAIR));
+}
+
+static sanya_t_Object *
+nullp(sanya_t_Object *ls_closure, sanya_t_Object *arg1)
+{
+    SANYA_R_RETURN_VALUE(sanya_r_W_Boolean(
+                sanya_r_W_Object_Type(arg1) == SANYA_T_NIL));
+}
+
+static sanya_t_Object *
+symbolp(sanya_t_Object *ls_closure, sanya_t_Object *arg1)
+{
+    SANYA_R_RETURN_VALUE(sanya_r_W_Boolean(
+                sanya_r_W_Object_Type(arg1) == SANYA_T_SYMBOL));
+}
+
+static sanya_t_Object *
+procedurep(sanya_t_Object *ls_closure, sanya_t_Object *arg1)
+{
+    SANYA_R_RETURN_VALUE(sanya_r_W_Boolean(
+                sanya_r_W_Object_Type(arg1) == SANYA_T_CLOSURE));
+}
+
+static sanya_t_Object *
+resume_callec(sanya_t_Object *ls_closure, sanya_t_Object *arg1)
+{
+    void *aux = ls_closure->as_closure.aux;
+    if (!aux) {
+        fprintf(stderr, "ERROR: resuming dumped escaping continuation.\n");
+        exit(1);
+    }
+    ls_closure->as_closure.aux = arg1;
+    longjmp(*((jmp_buf *)aux), 1);
+}
+
+static sanya_t_Object *
+callec(sanya_t_Object *ls_closure, sanya_t_Object *arg1)
+{
+    jmp_buf here;
+    sanya_t_Object *retval;
+    sanya_t_Object *cont = sanya_r_W_Closure(
+            &sanya_g_prelude_resume_callec_skel, NULL);
+    cont->as_closure.aux = &here;
+
+    if (setjmp(here) == 0) {
+        // Call into arg1.
+        SANYA_R_CALLCLOSURE_1(retval, arg1, cont);
+    }
+    else {
+        // Escape from call.
+        retval = cont->as_closure.aux;
+    }
+    cont->as_closure.aux = NULL;
+    SANYA_R_RETURN_VALUE(retval);
 }
 
 void
@@ -268,6 +399,12 @@ sanya_r_initialize_prelude()
     sanya_g_prelude_num_eq = (intptr_t)sanya_r_W_Closure(
             &sanya_g_prelude_num_eq_skel, NULL);
 
+    sanya_g_prelude_integerp_skel.name = "integer?";
+    sanya_g_prelude_integerp_skel.nb_args = 1;
+    sanya_g_prelude_integerp_skel.closure_ptr = integerp;
+    sanya_g_prelude_integerp = (intptr_t)sanya_r_W_Closure(
+            &sanya_g_prelude_integerp_skel, NULL);
+
     sanya_g_prelude_cons_skel.name = "cons";
     sanya_g_prelude_cons_skel.nb_args = 2;
     sanya_g_prelude_cons_skel.closure_ptr = cons;
@@ -286,5 +423,50 @@ sanya_r_initialize_prelude()
     sanya_g_prelude_cdr = (intptr_t)sanya_r_W_Closure(
             &sanya_g_prelude_cdr_skel, NULL);
 
+    sanya_g_prelude_setcar_skel.name = "set-car!";
+    sanya_g_prelude_setcar_skel.nb_args = 2;
+    sanya_g_prelude_setcar_skel.closure_ptr = setcar;
+    sanya_g_prelude_setcar = (intptr_t)sanya_r_W_Closure(
+            &sanya_g_prelude_setcar_skel, NULL);
+
+    sanya_g_prelude_setcdr_skel.name = "set-cdr!";
+    sanya_g_prelude_setcdr_skel.nb_args = 1;
+    sanya_g_prelude_setcdr_skel.closure_ptr = setcdr;
+    sanya_g_prelude_setcdr = (intptr_t)sanya_r_W_Closure(
+            &sanya_g_prelude_setcdr_skel, NULL);
+
+    sanya_g_prelude_pairp_skel.name = "pair?";
+    sanya_g_prelude_pairp_skel.nb_args = 1;
+    sanya_g_prelude_pairp_skel.closure_ptr = pairp;
+    sanya_g_prelude_pairp = (intptr_t)sanya_r_W_Closure(
+            &sanya_g_prelude_pairp_skel, NULL);
+
+    sanya_g_prelude_nullp_skel.name = "null?";
+    sanya_g_prelude_nullp_skel.nb_args = 1;
+    sanya_g_prelude_nullp_skel.closure_ptr = nullp;
+    sanya_g_prelude_nullp = (intptr_t)sanya_r_W_Closure(
+            &sanya_g_prelude_nullp_skel, NULL);
+
+    sanya_g_prelude_symbolp_skel.name = "symbol?";
+    sanya_g_prelude_symbolp_skel.nb_args = 1;
+    sanya_g_prelude_symbolp_skel.closure_ptr = symbolp;
+    sanya_g_prelude_symbolp = (intptr_t)sanya_r_W_Closure(
+            &sanya_g_prelude_symbolp_skel, NULL);
+
+    sanya_g_prelude_procedurep_skel.name = "procedure?";
+    sanya_g_prelude_procedurep_skel.nb_args = 1;
+    sanya_g_prelude_procedurep_skel.closure_ptr = procedurep;
+    sanya_g_prelude_procedurep = (intptr_t)sanya_r_W_Closure(
+            &sanya_g_prelude_procedurep_skel, NULL);
+
+    sanya_g_prelude_callec_skel.name = "call-with-escaping-continuation";
+    sanya_g_prelude_callec_skel.nb_args = 1;
+    sanya_g_prelude_callec_skel.closure_ptr = callec;
+    sanya_g_prelude_callec = (intptr_t)sanya_r_W_Closure(
+            &sanya_g_prelude_callec_skel, NULL);
+
+    sanya_g_prelude_resume_callec_skel.name = "result-escape-continuation";
+    sanya_g_prelude_resume_callec_skel.nb_args = 1;
+    sanya_g_prelude_resume_callec_skel.closure_ptr = resume_callec;
 }
 
