@@ -9,6 +9,8 @@ def compile_from_hir_walker(hir_walker):
     return cg.generate()
 
 class CodeGenerator(object):
+    """ Oh messy code...
+    """
     def __init__(self, lir_walker):
         self.walker = lir_walker
 
@@ -92,6 +94,9 @@ class CodeGenerator(object):
             elif const_val.is_unspecified():
                 self.emit('%s[%d] = sanya_r_W_Unspecified();' % (
                     consts_name, nth_const))
+            elif const_val.is_null():
+                self.emit('%s[%d] = sanya_r_W_Nil();' % (
+                    consts_name, nth_const))
             else:
                 raise ValueError('unsupported %s' % const_val)
 
@@ -117,17 +122,17 @@ class CodeGenerator(object):
         self.emit('// Globals')
         self.emit('sanya_t_TrampolineBuf sanya_g_trampoline_buf;')
         for i in xrange(len(self.walker.global_variable_list)):
-            self.emit('intptr_t sanya_g_global_variable_%d;' % i)
+            self.emit('static intptr_t sanya_g_global_variable_%d;' % i)
         for i in xrange(len(self.walker.skel_table)):
-            self.emit('sanya_t_ClosureSkeleton sanya_g_skeleton_%d;' % i)
+            self.emit('static sanya_t_ClosureSkeleton sanya_g_skeleton_%d;' % i)
         # cell recipts
         for i, skel in enumerate(self.walker.skel_table):
-            fmt = 'intptr_t sanya_g_skeleton_cell_recipt_%d[] = { %s };'
+            fmt = 'static intptr_t sanya_g_skeleton_cell_recipt_%d[] = { %s };'
             fmt %= (i, ', '.join('%s' % recipt
                                  for recipt in skel.cell_recipt))
             self.emit(fmt)
 
-        self.emit('intptr_t *sanya_g_toplevel_consts;')
+        self.emit('static intptr_t *sanya_g_toplevel_consts;')
         self.emit('')
 
     def emit_toplevel_func(self, skel):

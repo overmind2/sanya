@@ -7,6 +7,7 @@
     (+ (fibo (- n 1))
        (fibo (- n 2)))))
 
+;; TCO
 (define (sum n)
   (define (sum1 n accu)
     (if (< n 1) accu
@@ -15,7 +16,7 @@
 
 (define (main)
   (print (cons 3 (cons 2 (cons 1 '()))))
-  (print (fibo 30)))
+  (print (fibo 4)))
 
 (main)
 

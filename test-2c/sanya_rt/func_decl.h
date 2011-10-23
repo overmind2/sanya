@@ -163,14 +163,12 @@ extern sanya_t_TrampolineBuf sanya_g_trampoline_buf;
 
 
 // Runtime
-//static inline void sanya_r_check_nb_args(sanya_t_Object *clos, intptr_t nb_args);
 sanya_t_CellValue *sanya_r_build_cell_value(intptr_t *ref);
 void sanya_r_escape_cell_values(sanya_t_CellValue **cell_list,
                                 intptr_t length);
 sanya_t_Object *sanya_r_build_closure(sanya_t_ClosureSkeleton *skel,
                                       sanya_t_CellValue **cell_values,
                                       sanya_t_CellValue **fresh_cells);
-//static inline intptr_t sanya_r_to_boolean(sanya_t_Object *self);
 
 void sanya_r_halt();
 void sanya_r_bootstrap();  // defined in main.c instead.
@@ -221,15 +219,6 @@ extern intptr_t sanya_g_prelude_cdr;
             exit(1); \
         } \
     } while (0)
-
-static inline intptr_t 
-xsanya_r_to_boolean(sanya_t_Object *self)
-{
-    if (self == sanya_r_W_Boolean(0))
-        return 0;
-    else
-        return 1;
-}
 
 #define sanya_r_to_boolean(self) ((self) != sanya_r_W_Boolean(0))
 
