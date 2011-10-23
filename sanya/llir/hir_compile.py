@@ -602,6 +602,13 @@ class WalkerPrinter(object):
         self.indent = 0
 
     def pprint(self):
+        title = 'Globals'
+        print title
+        print len(title) * '*'
+        for key, value in self.walker.global_variables.items():
+            print '  %s: %s' % (key, value)
+        print
+
         self.pprint_once('-', self.walker.to_closure_skeleton())
         for i, skel in enumerate(self.walker.skeleton_registry):
             self.pprint_once(i, skel)
@@ -612,3 +619,4 @@ class WalkerPrinter(object):
         print title
         print '=' * len(title)
         print skel
+

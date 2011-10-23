@@ -1,16 +1,10 @@
 
 #include "sanya_prelude.h"
 
-void
-sanya_p_display(intptr_t *ls_retval, sanya_t_Object *ls_closure,
-                intptr_t ls_nb_args, ...)
+intptr_t
+sanya_p_display(sanya_t_Object *ls_closure, intptr_t arg1)
 {
-    sanya_t_Object *item;
-    sanya_r_check_nb_args(ls_closure, ls_nb_args);
-    va_list ls_arg_list;
-    va_start(ls_arg_list, ls_nb_args);
-    item = va_arg(ls_arg_list, sanya_t_Object *);
-
+    sanya_t_Object *item = (sanya_t_Object *)arg1;
     switch (sanya_r_W_Object_Type(item)) {
         case SANYA_T_FIXNUM:
             printf("#<fixnum %ld>\n", sanya_r_W_Fixnum_Unwrap(item));
@@ -34,5 +28,6 @@ sanya_p_display(intptr_t *ls_retval, sanya_t_Object *ls_closure,
             printf("#<unknown at %p>\n", item);
             break;
     }
+    return (intptr_t)sanya_r_W_Unspecified();
 }
 

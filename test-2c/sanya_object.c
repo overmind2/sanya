@@ -14,6 +14,15 @@ sanya_r_W_Unspecified()
 }
 
 sanya_t_Object *
+sanya_r_W_Boolean(intptr_t bval)
+{
+    if (bval)
+        return (sanya_t_Object *)(1 << SANYA_R_TAGWIDTH | SANYA_T_BOOLEAN);
+    else
+        return (sanya_t_Object *)(0 << SANYA_R_TAGWIDTH | SANYA_T_BOOLEAN);
+}
+
+sanya_t_Object *
 sanya_r_W_Fixnum(intptr_t ival)
 {
     return (sanya_t_Object *)((ival << SANYA_R_TAGWIDTH) | SANYA_T_FIXNUM);

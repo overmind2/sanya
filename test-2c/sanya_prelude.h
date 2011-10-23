@@ -8,8 +8,7 @@
 void sanya_r_initialize_prelude();
 
 // Display.
-void sanya_p_display(intptr_t *ls_retval, sanya_t_Object *ls_closure,
-                     intptr_t ls_nb_args, ...);
+intptr_t sanya_p_display(sanya_t_Object *ls_closure, intptr_t ls_arg1);
 
 
 #endif /* SANYA_PRELUDE_H */

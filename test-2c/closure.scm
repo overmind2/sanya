@@ -1,3 +1,4 @@
+(display (+ 1 2))
 
 (define (loop n)
   (if (< n 1) n

@@ -6,6 +6,7 @@
 #define SANYA_T_FIXNUM  1
 #define SANYA_T_UNSPEC  2
 #define SANYA_T_NIL     3
+#define SANYA_T_BOOLEAN 4
 #define SANYA_T_SYMBOL  16
 #define SANYA_T_PAIR    17
 #define SANYA_T_CLOSURE 18
@@ -31,6 +32,7 @@ struct sanya_t_Object_ {
 // Constructors
 sanya_t_Object *sanya_r_W_Nil();
 sanya_t_Object *sanya_r_W_Unspecified();
+sanya_t_Object *sanya_r_W_Boolean(intptr_t bval);
 sanya_t_Object *sanya_r_W_Fixnum(intptr_t ival);
 sanya_t_Object *sanya_r_W_Symbol(char *sval);
 sanya_t_Object *sanya_r_W_Pair(intptr_t car, intptr_t cdr);

@@ -134,16 +134,16 @@ class LoadConst(InsnTypeAB):
         return ' ; rA = consts[kB]'
 
 class StoreGlobal(InsnTypeAB):
-    """ globalvars[names[kB]] = rA
+    """ globalvars[names[kA]] = rB
     """
     def comment_repr(self):
-        return ' ; globalvars[names[kB]] = rA'
+        return ' ; globalvars[names[kA]] = rB'
 
 class StoreCell(InsnTypeAB):
-    """ cells[kB] = rA
+    """ cells[kA] = rB
     """
     def comment_repr(self):
-        return ' ; cells[kB] = rA'
+        return ' ; cells[kA] = rB'
 
 class BuildClosure(InsnTypeAB):
     """ rA = build_closure_and_open_cellvalues(skeleton_registry[B])

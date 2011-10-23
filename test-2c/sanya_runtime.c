@@ -1,13 +1,6 @@
 #include "sanya_runtime.h"
 #include "sanya_object.h"
 
-static sanya_t_CellValue dummy_cell_head = {
-    NULL,
-    { NULL },
-    &dummy_cell_head,
-    &dummy_cell_head
-};
-
 void
 sanya_r_check_nb_args(sanya_t_Object *clos, intptr_t nb_args)
 {
@@ -23,38 +16,32 @@ sanya_r_check_nb_args(sanya_t_Object *clos, intptr_t nb_args)
 
 // ref is a c-stack slot currently.
 sanya_t_CellValue *
-sanya_r_build_cell_value(intptr_t *ref, intptr_t *frame_mark)
+sanya_r_build_cell_value(intptr_t *ref)
 {
     sanya_t_CellValue *self = malloc(sizeof(sanya_t_CellValue));
     self->ref = ref;
-    self->frame_mark = frame_mark;
-
-    self->next = dummy_cell_head.next;
-    self->prev = &dummy_cell_head;
-    dummy_cell_head.next->prev = self;
-    dummy_cell_head.next = self;
     return self;
 }
 
 // escape cell values that matches this frame_mark to the heap.
 void
-sanya_r_escape_cell_values(intptr_t *frame_mark)
+sanya_r_escape_cell_values(sanya_t_CellValue **cell_list, intptr_t length)
 {
-    sanya_t_CellValue *iter = dummy_cell_head.next;
-    sanya_t_CellValue *next_cell;
-    while (iter != &dummy_cell_head) {
-        next_cell = iter->next;
-        if (iter->frame_mark == frame_mark) {
-            // Unlink from list.
-            iter->prev->next = next_cell;
-            next_cell->prev = iter->prev;
-
-            // Escape.
-            iter->escaped_value = *(iter->ref);
-            iter->ref = &(iter->escaped_value);
-        }
-        iter = next_cell;
+    intptr_t i;
+    for (i = 0; i < length; ++i) {
+        sanya_t_CellValue *iter = cell_list[i];
+        iter->escaped_value = *(iter->ref);
+        iter->ref = &(iter->escaped_value);
     }
+}
+
+intptr_t
+sanya_r_to_boolean(sanya_t_Object *self)
+{
+    if (self == sanya_r_W_Boolean(0))
+        return 0;
+    else
+        return 1;
 }
 
 // @see sanya/closure.py - W_Skeleton.build_closure
