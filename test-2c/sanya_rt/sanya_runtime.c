@@ -1,19 +1,6 @@
 #include "sanya_runtime.h"
 #include "sanya_object.h"
 
-void
-sanya_r_check_nb_args(sanya_t_Object *clos, intptr_t nb_args)
-{
-    sanya_t_ClosureSkeleton *skel = clos->as_closure.skeleton;
-    if (skel->nb_args != nb_args) {
-        fprintf(stderr, "ERROR: closure %s called with wrong number"
-                " of argument.\n", skel->name);
-        fprintf(stderr, " -- requires %ld arguments, got %ld.\n",
-                skel->nb_args, nb_args);
-        exit(1);
-    }
-}
-
 // ref is a c-stack slot currently.
 sanya_t_CellValue *
 sanya_r_build_cell_value(intptr_t *ref)

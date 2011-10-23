@@ -1,4 +1,5 @@
 
+#include "sanya_runtime.h"
 #include "sanya_object.h"
 
 sanya_t_Object *
@@ -29,7 +30,7 @@ sanya_r_W_Fixnum(intptr_t ival)
 }
 
 sanya_t_Object *
-sanya_r_W_Symbol(char *sval)
+sanya_r_W_Symbol(const char *sval)
 {
     sanya_t_Object *self = malloc(sizeof(sanya_t_Object));
     self->type = SANYA_T_SYMBOL;

@@ -579,14 +579,12 @@ class DeferredLambdaCompilation(object):
         # fill in the frame slots using those arguments
         for w_argname in arg_list:
             frame_slot_repr = FrameValueRepr(lambda_walker.alloc_frame_slot())
-            lambda_walker.local_variables[w_argname.to_string()] \
-                    = frame_slot_repr
+            lambda_walker.local_variables[w_argname] = frame_slot_repr
 
         # if vararg
         if lambda_walker.varargs_p:
             frame_slot_repr = FrameValueRepr(lambda_walker.alloc_frame_slot())
-            lambda_walker.local_variables[w_rest.to_string()] \
-                    = frame_slot_repr
+            lambda_walker.local_variables[w_rest] = frame_slot_repr
 
         # compile the body and add to the global skeleton table.
         lambda_walker.visit_list_of_expr(lambda_body)

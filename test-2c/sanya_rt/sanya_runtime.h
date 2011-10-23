@@ -5,6 +5,7 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include "sanya_object.h"
 
 // naming conventions: sanya_t -- types
 //                     sanya_g -- globals
@@ -78,7 +79,7 @@ struct sanya_t_ClosureSkeleton_ {
     intptr_t nb_cells;
     void *closure_ptr;  // cast to some func before calling.
     intptr_t nb_args;
-    intptr_t vararg_p;
+    intptr_t varargs_p;
     const char *name;
 };
 
@@ -90,7 +91,7 @@ struct sanya_t_CellValue_ {
     };
 };
 
-void sanya_r_check_nb_args(sanya_t_Object *clos, intptr_t nb_args);
+inline void sanya_r_check_nb_args(sanya_t_Object *clos, intptr_t nb_args);
 sanya_t_CellValue *sanya_r_build_cell_value(intptr_t *ref);
 void sanya_r_escape_cell_values(sanya_t_CellValue **cell_list,
                                 intptr_t length);
@@ -101,6 +102,20 @@ intptr_t sanya_r_to_boolean(sanya_t_Object *self);
 
 void sanya_r_halt();
 void sanya_r_bootstrap();  // defined in main.c instead.
+
+inline void
+sanya_r_check_nb_args(sanya_t_Object *clos, intptr_t nb_args)
+{
+    sanya_t_ClosureSkeleton *skel = clos->as_closure.skeleton;
+    if (skel->nb_args != nb_args) {
+        fprintf(stderr, "ERROR: closure %s called with wrong number"
+                " of argument.\n", skel->name);
+        fprintf(stderr, " -- requires %ld arguments, got %ld.\n",
+                skel->nb_args, nb_args);
+        exit(1);
+    }
+}
+
 
 #endif /* SANYA_RUNTIME_H */
 

@@ -1,8 +1,6 @@
 #ifndef SANYA_OBJECT_H
 #define SANYA_OBJECT_H
 
-#include "sanya_runtime.h"
-
 #define SANYA_T_FIXNUM  1
 #define SANYA_T_UNSPEC  2
 #define SANYA_T_NIL     3
@@ -14,10 +12,15 @@
 #define SANYA_R_TAGWIDTH  4
 #define SANYA_R_TAGMASK  15
 
+// From sanya_runtime
+typedef struct sanya_t_ClosureSkeleton_ sanya_t_ClosureSkeleton;
+typedef struct sanya_t_CellValue_ sanya_t_CellValue;
+typedef struct sanya_t_Object_ sanya_t_Object;
+
 struct sanya_t_Object_ {
     intptr_t type;
     union {
-        char *as_symbol;
+        const char *as_symbol;
         struct {
             sanya_t_Object *car;
             sanya_t_Object *cdr;
@@ -34,7 +37,7 @@ sanya_t_Object *sanya_r_W_Nil();
 sanya_t_Object *sanya_r_W_Unspecified();
 sanya_t_Object *sanya_r_W_Boolean(intptr_t bval);
 sanya_t_Object *sanya_r_W_Fixnum(intptr_t ival);
-sanya_t_Object *sanya_r_W_Symbol(char *sval);
+sanya_t_Object *sanya_r_W_Symbol(const char *sval);
 sanya_t_Object *sanya_r_W_Pair(intptr_t car, intptr_t cdr);
 sanya_t_Object *sanya_r_W_Closure(sanya_t_ClosureSkeleton *skeleton,
                                   sanya_t_CellValue **cell_values);

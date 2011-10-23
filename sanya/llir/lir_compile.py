@@ -19,6 +19,8 @@ class CodeGenerator(object):
         for i, skel in enumerate(self.walker.skel_table):
             self.emit_one_skeleton_func(i, skel)
         self.emit_toplevel_func(self.walker.toplevel_skel)
+        self.emit_bootstrap_func()
+        self.emit_main_func()
         return self.buf.getvalue()
 
     def indent(self):
@@ -33,7 +35,78 @@ class CodeGenerator(object):
         self.buf.write('\n')
 
     def emit_bootstrap_func(self):
-        pass
+        self.emit('')
+        self.emit('void')
+        self.emit('sanya_r_bootstrap()')
+        self.emit('{')
+        self.indent()
+
+        # set properties for skeletons
+        for i, skel in enumerate(self.walker.skel_table):
+            skel_name = 'sanya_g_skeleton_%d' % i
+            self.emit('%s.name = "%s";' % (skel_name, skel.name))
+            self.emit('%s.consts = malloc(sizeof(intptr_t) * %d);' % (
+                skel_name, len(skel.consts)))
+            # consts.
+            for nth_const, const_val in enumerate(skel.consts):
+                if const_val.is_fixnum():
+                    self.emit('%s.consts[%d] = sanya_r_W_Fixnum(%d);' % (
+                        skel_name, nth_const, const_val.ival))
+                elif const_val.is_symbol():
+                    self.emit('%s.consts[%d] = sanya_r_W_Symbol("%s");' % (
+                        skel_name, nth_const, const_val.sval))
+                elif const_val.is_unspecified():
+                    self.emit('%s.consts[%d] = sanya_r_W_Unspecified();' % (
+                        skel_name, nth_const))
+                else:
+                    raise ValueError('unsupported %s' % const_val)
+            # cell_recipt, initialized in global section
+            self.emit('%s.cell_recipt = sanya_g_skeleton_cell_recipt_%d;' % (
+                skel_name, i))
+            self.emit('%s.nb_cells = %d;' % (skel_name, len(skel.cell_recipt)))
+            # function ptr
+            self.emit('%s.closure_ptr = sanya_g_closure_ptr_%d;' % (
+                skel_name, i))
+            # arg count
+            self.emit('%s.nb_args = %d;' % (skel_name, skel.nb_args))
+            self.emit('%s.varargs_p = %d;' % (skel_name, skel.varargs_p))
+            # done
+            self.emit('')
+
+        # dont forget about toplevel..
+        skel = self.walker.toplevel_skel
+        consts_name = 'sanya_g_toplevel_consts'
+        self.emit('%s = malloc(sizeof(intptr_t) * %d);' % (
+            consts_name, len(skel.consts)))
+        # consts.
+        for nth_const, const_val in enumerate(skel.consts):
+            if const_val.is_fixnum():
+                self.emit('%s[%d] = sanya_r_W_Fixnum(%d);' % (
+                    consts_name, nth_const, const_val.ival))
+            elif const_val.is_symbol():
+                self.emit('%s[%d] = sanya_r_W_Symbol("%s");' % (
+                    consts_name, nth_const, const_val.sval))
+            elif const_val.is_unspecified():
+                self.emit('%s[%d] = sanya_r_W_Unspecified();' % (
+                    consts_name, nth_const))
+            else:
+                raise ValueError('unsupported %s' % const_val)
+
+        self.dedent()
+        self.emit('}')
+
+    def emit_main_func(self):
+        self.emit('')
+        self.emit('int')
+        self.emit('main(int argc, char **argv)')
+        self.emit('{')
+        self.indent()
+        self.emit('sanya_r_initialize_prelude();  // @see sanya_prelude.*');
+        self.emit('sanya_r_bootstrap();');
+        self.emit('sanya_r_toplevel();');
+        self.emit('return 0;')
+        self.dedent()
+        self.emit('}')
 
     def emit_global_decl(self):
         self.emit('#include "sanya_runtime.h"')
@@ -41,10 +114,18 @@ class CodeGenerator(object):
         self.emit('#include "sanya_prelude.h"')
         self.emit('')
         self.emit('// Globals')
-        self.emit('intptr_t sanya_g_global_variables[%d];' %
-                len(self.walker.global_variable_list))
-        self.emit('sanya_t_ClosureSkeleton sanya_g_skeleton_table[%d];' %
-                len(self.walker.skel_table))
+        for i in xrange(len(self.walker.global_variable_list)):
+            self.emit('intptr_t sanya_g_global_variable_%d;' % i)
+        for i in xrange(len(self.walker.skel_table)):
+            self.emit('sanya_t_ClosureSkeleton sanya_g_skeleton_%d;' % i)
+        # cell recipts
+        for i, skel in enumerate(self.walker.skel_table):
+            fmt = 'intptr_t sanya_g_skeleton_cell_recipt_%d[] = { %s };'
+            fmt %= (i, ', '.join('%s' % recipt
+                                 for recipt in skel.cell_recipt))
+            self.emit(fmt)
+
+        self.emit('intptr_t *sanya_g_toplevel_consts;')
         self.emit('')
 
     def emit_toplevel_func(self, skel):
@@ -53,9 +134,11 @@ class CodeGenerator(object):
         self.emit('{')
         self.indent()
 
+        # local variable declaration
         self.emit('intptr_t %s;' % (', '.join('v_%d' % vid for vid in
             range(0, skel.frame_size + 1))))
 
+        # for each instruction, translate to c
         for lir_insn in skel.lir_list:
             c_line = lir_insn.to_c(skel, self.walker) # may be a list or string
             if isinstance(c_line, basestring):
@@ -105,12 +188,14 @@ class CodeGenerator(object):
 
         # end of func.
         self.dedent()
-        self.emit('}')
-        self.emit('// End of closure `%s`' % skel.name)
+        self.emit('}  // End of closure `%s`' % skel.name)
         self.emit('')
 
 
 class LowLevelWalker(object):
+    """ TODO: compare toplevel define with total LoadGlobals and figure
+        out what prelude procedures should we add.
+    """
     def __init__(self, hir_walker):
         self.global_variable_list = []
         self.global_variable_id_map = {}
@@ -119,6 +204,9 @@ class LowLevelWalker(object):
                 hir_walker.to_closure_skeleton())
         self.skel_table = [LowLevelSkeleton(self, skel) for skel in
                            hir_walker.skeleton_registry]
+
+        self.gid_to_name = dict((val, key) for (key, val) in
+                self.global_variable_id_map.iteritems())
 
     def new_global_var(self, name):
         """ Return a global variable index

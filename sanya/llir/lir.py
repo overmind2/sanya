@@ -26,13 +26,26 @@ class MoveLocal(LowLevelInsn):
 
 
 class LoadGlobal(LowLevelInsn):
+    # keep this table in sync with sanya_prelude.h
+    prelude_table = {
+        '+': 'add',
+        'display': 'display',
+        'newline': 'newline',
+        '<': 'lessthan',
+        '=': 'num_eq',
+    }
     def __init__(self, dest, gtable_index):
         self.dest = dest
         self.gtable_index = gtable_index
 
     def to_c(self, skel, lir_walker):
-        return 'v_%d = sanya_g_global_variables[%d];' % (
-                self.dest, self.gtable_index)
+        name = lir_walker.gid_to_name[self.gtable_index].to_string()
+        if name in self.prelude_table:
+            return 'v_%d = sanya_g_prelude_%s;' % (self.dest,
+                    self.prelude_table[name])
+        else:
+            return 'v_%d = sanya_g_global_variable_%d;' % (
+                    self.dest, self.gtable_index)
 
 class LoadCell(LowLevelInsn):
     def __init__(self, dest, cell_index):
@@ -49,8 +62,12 @@ class LoadConst(LowLevelInsn):
         self.const_index = const_index
 
     def to_c(self, skel, lir_walker):
-        return 'v_%d = ls_closure->as_closure.skeleton->consts[%d];' % (
-                self.dest, self.const_index)
+        if lir_walker.toplevel_skel is skel:
+            return 'v_%d = sanya_g_toplevel_consts[%d];' % (
+                    self.dest, self.const_index)
+        else:
+            return 'v_%d = ls_closure->as_closure.skeleton->consts[%d];' % (
+                    self.dest, self.const_index)
 
 class StoreGlobal(LowLevelInsn):
     def __init__(self, gtable_index, src):
@@ -58,7 +75,7 @@ class StoreGlobal(LowLevelInsn):
         self.src = src
 
     def to_c(self, skel, lir_walker):
-        return 'sanya_g_global_variables[%d] = v_%d;' % (
+        return 'sanya_g_global_variable_%d = v_%d;' % (
                 self.gtable_index, self.src)
 
 class StoreCell(LowLevelInsn):
@@ -77,13 +94,17 @@ class BuildClosure(LowLevelInsn):
 
     def to_c(self, skel, lir_walker):
         skel_to_build = lir_walker.skel_table[self.skel_index]
-        fmt = ('v_%(dest)d = (intptr_t)%(func)s(%(skel_tab)s + %(index)d, '
-               'ls_closure->as_closure.cell_values, ls_fresh_cells);')
+        fmt = ('v_%(dest)d = (intptr_t)%(func)s(%(skel_prefix)s_%(index)d, '
+               '%(cellval)s, %(freshp)s);')
         fmt %= {
             'dest': self.dest,
             'func': 'sanya_r_build_closure',
-            'skel_tab': 'sanya_g_skeleton_table',
-            'index': self.skel_index
+            'skel_prefix': '&sanya_g_skeleton',
+            'index': self.skel_index,
+            'cellval': ('ls_closure->as_closure.cell_values' if skel is not
+                         lir_walker.toplevel_skel else 'NULL'),
+            'freshp': ('ls_fresh_cells' if skel.fresh_cells
+                       else 'NULL')
         }
         return ['// Build from skeleton `%s`' % skel_to_build.name,
                 fmt]
@@ -96,8 +117,8 @@ class Call(LowLevelInsn):
 
     def to_c(self, skel, lir_walker):
         fmt = 'SANYA_R_CALLCLOSURE_%(argc)s(%(arglist)s);'
-        arglist = [self.dest, self.func] + range(self.dest + 1, self.dest +
-                self.argc)
+        arglist = [self.dest, self.func] + range(self.func + 1, self.func +
+                self.argc + 1)
         return fmt % {
             'argc': self.argc,
             'arglist': ', '.join('v_%d' % var_id for var_id in arglist)
@@ -137,6 +158,6 @@ class BranchIfFalse(LowLevelInsn):
         self.label_id = hir_label.ident
 
     def to_c(self, skel, lir_walker):
-        return 'if (sanya_r_to_boolean(v_%d)) goto LABEL_%d;' % (
-                self.pred, self.label_id)
+        return ('if (!sanya_r_to_boolean((sanya_t_Object *)v_%d)) '
+                'goto LABEL_%d;' % (self.pred, self.label_id))
 
