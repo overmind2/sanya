@@ -11,7 +11,7 @@ sanya_r_build_cell_value(intptr_t *ref)
     return self;
 }
 
-// escape cell values that matches this frame_mark to the heap.
+// escape cell values that is build freshly.
 void
 sanya_r_escape_cell_values(sanya_t_CellValue **cell_list, intptr_t length)
 {
@@ -169,7 +169,7 @@ display(sanya_t_Object *ls_closure, intptr_t arg1)
             printf("#<unknown at %p>", item);
             break;
     }
-    return (intptr_t)sanya_r_W_Unspecified();
+    SANYA_R_RETURN_VALUE((intptr_t)sanya_r_W_Unspecified());
 }
 
 static intptr_t

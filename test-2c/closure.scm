@@ -16,7 +16,7 @@
 
 (define (main)
   (print (cons 3 (cons 2 (cons 1 '()))))
-  (print (fibo 4)))
+  (print (fibo 40)))
 
 (main)
 
