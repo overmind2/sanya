@@ -19,8 +19,10 @@
 struct sanya_t_ClosureSkeleton_;
 struct sanya_t_CellValue_;
 struct sanya_t_Object_;
+struct sanya_t_TrampolineBuf_;
 
 typedef struct sanya_t_ClosureSkeleton_ sanya_t_ClosureSkeleton;
 typedef struct sanya_t_CellValue_ sanya_t_CellValue;
 typedef struct sanya_t_Object_ sanya_t_Object;
+typedef struct sanya_t_TrampolineBuf_ sanya_t_TrampolineBuf;
 

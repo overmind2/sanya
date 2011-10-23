@@ -39,10 +39,14 @@ class LoadGlobal(LowLevelInsn):
     # keep this table in sync with sanya_prelude.h
     prelude_table = {
         '+': 'add',
+        '-': 'minus',
         'display': 'display',
         'newline': 'newline',
         '<': 'lessthan',
         '=': 'num_eq',
+        'cons': 'cons',
+        'car': 'car',
+        'cdr': 'cdr',
     }
     def __init__(self, dest, gtable_index):
         self.dest = dest
@@ -139,17 +143,40 @@ class Call(LowLevelInsn):
             'arglist': ', '.join('v_%d' % var_id for var_id in arglist)
         }
 
+class TailCall(Call):
+    def __init__(self, dest, func, argc):
+        self.dest = dest
+        self.func = func
+        self.argc = argc
+
+    def to_c(self, skel, lir_walker):
+        if skel is lir_walker.toplevel_skel:
+            return Call.to_c(self, skel, lir_walker) # toplevel has not tail
+        else:
+            fmt = 'SANYA_R_TAILCALLCLOSURE_%(argc)s(%(arglist)s);'
+            arglist = [self.func] + range(self.func + 1, self.func +
+                    self.argc + 1)
+            fmt %= {
+                'argc': self.argc,
+                'arglist': ', '.join('v_%d' % var_id for var_id in arglist)
+            }
+            if not skel.fresh_cells: # no need to escape cell values.
+                return fmt
+            else:
+                return ['sanya_r_escape_cell_values(ls_fresh_cells, %d);' % (
+                        len(skel.fresh_cells)), fmt]
+
 class Return(LowLevelInsn):
     def __init__(self, src):
         self.src = src
 
     def to_c(self, skel, lir_walker):
+        ret_stmt = 'SANYA_R_RETURN_VALUE(v_%d);' % self.src
         if not skel.fresh_cells: # no need to escape cell values.
-            return 'return v_%d;' % self.src
+            return ret_stmt
         else:
             return ['sanya_r_escape_cell_values(ls_fresh_cells, %d);' % (
-                    len(skel.fresh_cells)),
-                    'return v_%d;' % self.src]
+                    len(skel.fresh_cells)), ret_stmt]
 
 class Label(LowLevelInsn):
     def __init__(self, hir_label):

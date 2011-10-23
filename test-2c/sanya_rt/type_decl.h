@@ -52,3 +52,10 @@ struct sanya_t_CellValue_ {
     };
 };
 
+struct sanya_t_TrampolineBuf_ {
+    intptr_t is_done;
+    intptr_t closure;
+    intptr_t argc;
+    intptr_t argv[16];
+};
+

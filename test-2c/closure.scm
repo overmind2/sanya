@@ -1,23 +1,21 @@
-(define (cons a b)
-  (lambda (f)
-    (f a b)))
-
-(define (car c)
-  (c (lambda (a b)
-       a)))
-
-(define (cdr c)
-  (c (lambda (a b)
-       b)))
+(define (print x)
+  (display x)
+  (newline))
 
 (define (fibo n)
   (if (< n 2) n
-    (+ (fibo (+ n -1))
-       (fibo (+ n -2)))))
+    (+ (fibo (- n 1))
+       (fibo (- n 2)))))
 
-(display (car (cons 1 2)))
-(newline)
+(define (sum n)
+  (define (sum1 n accu)
+    (if (< n 1) accu
+      (sum1 (- n 1) (+ n accu))))
+  (sum1 n 0))
 
-(display (fibo 38))
-(newline)
+(define (main)
+  (print (cons 3 (cons 2 (cons 1 '()))))
+  (print (fibo 30)))
+
+(main)
 

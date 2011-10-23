@@ -107,14 +107,22 @@ sanya_r_W_Object_Nullp(sanya_t_Object *self)
 intptr_t sanya_g_prelude_display;
 intptr_t sanya_g_prelude_newline;
 intptr_t sanya_g_prelude_add;
+intptr_t sanya_g_prelude_minus;
 intptr_t sanya_g_prelude_lessthan;
 intptr_t sanya_g_prelude_num_eq;
+intptr_t sanya_g_prelude_cons;
+intptr_t sanya_g_prelude_car;
+intptr_t sanya_g_prelude_cdr;
 
 static sanya_t_ClosureSkeleton sanya_g_prelude_display_skel;
 static sanya_t_ClosureSkeleton sanya_g_prelude_newline_skel;
 static sanya_t_ClosureSkeleton sanya_g_prelude_add_skel;
+static sanya_t_ClosureSkeleton sanya_g_prelude_minus_skel;
 static sanya_t_ClosureSkeleton sanya_g_prelude_lessthan_skel;
 static sanya_t_ClosureSkeleton sanya_g_prelude_num_eq_skel;
+static sanya_t_ClosureSkeleton sanya_g_prelude_cons_skel;
+static sanya_t_ClosureSkeleton sanya_g_prelude_car_skel;
+static sanya_t_ClosureSkeleton sanya_g_prelude_cdr_skel;
 
 static intptr_t
 display(sanya_t_Object *ls_closure, intptr_t arg1)
@@ -122,7 +130,7 @@ display(sanya_t_Object *ls_closure, intptr_t arg1)
     sanya_t_Object *item = (sanya_t_Object *)arg1;
     switch (sanya_r_W_Object_Type(item)) {
         case SANYA_T_FIXNUM:
-            printf("#<fixnum %ld>", sanya_r_W_Fixnum_Unwrap(item));
+            printf("%ld", sanya_r_W_Fixnum_Unwrap(item));
             break;
         case SANYA_T_UNSPEC:
             printf("#<unspecified>");
@@ -134,11 +142,25 @@ display(sanya_t_Object *ls_closure, intptr_t arg1)
             printf("%s", sanya_r_to_boolean(item) ? "#t" : "#f");
             break;
         case SANYA_T_SYMBOL:
-            printf("#<symbol %s>", item->as_symbol);
+            printf("%s", item->as_symbol);
             break;
         case SANYA_T_PAIR:
-            printf("#<pair at %p>", item);
-            break;
+            {
+                printf("(");
+                display(ls_closure, item->as_pair.car);
+                item = item->as_pair.cdr;
+                for (; sanya_r_W_Object_Type(item) == SANYA_T_PAIR;
+                        item = item->as_pair.cdr) {
+                    printf(" ");
+                    display(ls_closure, item->as_pair.car);
+                }
+                if (!sanya_r_W_Object_Nullp(item)) {
+                    printf(" . ");
+                    display(ls_closure, item);
+                }
+                printf(")");
+                break;
+            }
         case SANYA_T_CLOSURE:
             printf("#<closure `%s` at %p>",
                     item->as_closure.skeleton->name, item);
@@ -154,28 +176,57 @@ static intptr_t
 newline(sanya_t_Object *ls_closure)
 {
     puts("");
-    return (intptr_t)sanya_r_W_Unspecified();
+    SANYA_R_RETURN_VALUE((intptr_t)sanya_r_W_Unspecified());
 }
 
 static sanya_t_Object *
-add(sanya_t_Object *ls_closure, sanya_t_Object *arg1, sanya_t_Object *arg2)
+add(sanya_t_Object *ls_closure,
+    sanya_t_Object *arg1, sanya_t_Object *arg2)
 {
-    return sanya_r_W_Fixnum(sanya_r_W_Fixnum_Unwrap(arg1) + 
-                            sanya_r_W_Fixnum_Unwrap(arg2));
+    SANYA_R_RETURN_VALUE(sanya_r_W_Fixnum(sanya_r_W_Fixnum_Unwrap(arg1) + 
+                                          sanya_r_W_Fixnum_Unwrap(arg2)));
 }
 
 static sanya_t_Object *
-lessthan(sanya_t_Object *ls_closure, sanya_t_Object *arg1, sanya_t_Object *arg2)
+minus(sanya_t_Object *ls_closure,
+      sanya_t_Object *arg1, sanya_t_Object *arg2)
 {
-    return sanya_r_W_Boolean(sanya_r_W_Fixnum_Unwrap(arg1) <
-                             sanya_r_W_Fixnum_Unwrap(arg2));
+    SANYA_R_RETURN_VALUE(sanya_r_W_Fixnum(sanya_r_W_Fixnum_Unwrap(arg1) -
+                                          sanya_r_W_Fixnum_Unwrap(arg2)));
 }
 
 static sanya_t_Object *
-num_eq(sanya_t_Object *ls_closure, sanya_t_Object *arg1, sanya_t_Object *arg2)
+lessthan(sanya_t_Object *ls_closure,
+         sanya_t_Object *arg1, sanya_t_Object *arg2)
 {
-    return sanya_r_W_Boolean(sanya_r_W_Fixnum_Unwrap(arg1) ==
-                             sanya_r_W_Fixnum_Unwrap(arg2));
+    SANYA_R_RETURN_VALUE(sanya_r_W_Boolean(sanya_r_W_Fixnum_Unwrap(arg1) <
+                                           sanya_r_W_Fixnum_Unwrap(arg2)));
+}
+
+static sanya_t_Object *
+num_eq(sanya_t_Object *ls_closure,
+       sanya_t_Object *arg1, sanya_t_Object *arg2)
+{
+    SANYA_R_RETURN_VALUE(sanya_r_W_Boolean(sanya_r_W_Fixnum_Unwrap(arg1) ==
+                                           sanya_r_W_Fixnum_Unwrap(arg2)));
+}
+
+static sanya_t_Object *
+cons(sanya_t_Object *ls_closure, sanya_t_Object *arg1, sanya_t_Object *arg2)
+{
+    SANYA_R_RETURN_VALUE(sanya_r_W_Pair(arg1, arg2));
+}
+
+static sanya_t_Object *
+car(sanya_t_Object *ls_closure, sanya_t_Object *arg1)
+{
+    SANYA_R_RETURN_VALUE(arg1->as_pair.car);
+}
+
+static sanya_t_Object *
+cdr(sanya_t_Object *ls_closure, sanya_t_Object *arg1)
+{
+    SANYA_R_RETURN_VALUE(arg1->as_pair.cdr);
 }
 
 void
@@ -199,6 +250,12 @@ sanya_r_initialize_prelude()
     sanya_g_prelude_add = (intptr_t)sanya_r_W_Closure(
             &sanya_g_prelude_add_skel, NULL);
 
+    sanya_g_prelude_minus_skel.name = "-";
+    sanya_g_prelude_minus_skel.nb_args = 2;
+    sanya_g_prelude_minus_skel.closure_ptr = minus;
+    sanya_g_prelude_minus = (intptr_t)sanya_r_W_Closure(
+            &sanya_g_prelude_minus_skel, NULL);
+
     sanya_g_prelude_lessthan_skel.name = "<";
     sanya_g_prelude_lessthan_skel.nb_args = 2;
     sanya_g_prelude_lessthan_skel.closure_ptr = lessthan;
@@ -210,5 +267,24 @@ sanya_r_initialize_prelude()
     sanya_g_prelude_num_eq_skel.closure_ptr = num_eq;
     sanya_g_prelude_num_eq = (intptr_t)sanya_r_W_Closure(
             &sanya_g_prelude_num_eq_skel, NULL);
+
+    sanya_g_prelude_cons_skel.name = "cons";
+    sanya_g_prelude_cons_skel.nb_args = 2;
+    sanya_g_prelude_cons_skel.closure_ptr = cons;
+    sanya_g_prelude_cons = (intptr_t)sanya_r_W_Closure(
+            &sanya_g_prelude_cons_skel, NULL);
+
+    sanya_g_prelude_car_skel.name = "car";
+    sanya_g_prelude_car_skel.nb_args = 1;
+    sanya_g_prelude_car_skel.closure_ptr = car;
+    sanya_g_prelude_car = (intptr_t)sanya_r_W_Closure(
+            &sanya_g_prelude_car_skel, NULL);
+
+    sanya_g_prelude_cdr_skel.name = "cdr";
+    sanya_g_prelude_cdr_skel.nb_args = 1;
+    sanya_g_prelude_cdr_skel.closure_ptr = cdr;
+    sanya_g_prelude_cdr = (intptr_t)sanya_r_W_Closure(
+            &sanya_g_prelude_cdr_skel, NULL);
+
 }
 

@@ -58,6 +58,9 @@ class CodeGenerator(object):
                 elif const_val.is_unspecified():
                     self.emit('%s.consts[%d] = sanya_r_W_Unspecified();' % (
                         skel_name, nth_const))
+                elif const_val.is_null():
+                    self.emit('%s.consts[%d] = sanya_r_W_Nil();' % (
+                        skel_name, nth_const))
                 else:
                     raise ValueError('unsupported %s' % const_val)
             # cell_recipt, initialized in global section
@@ -112,6 +115,7 @@ class CodeGenerator(object):
         self.emit('#include "func_decl.h"')
         self.emit('')
         self.emit('// Globals')
+        self.emit('sanya_t_TrampolineBuf sanya_g_trampoline_buf;')
         for i in xrange(len(self.walker.global_variable_list)):
             self.emit('intptr_t sanya_g_global_variable_%d;' % i)
         for i in xrange(len(self.walker.skel_table)):
@@ -256,8 +260,10 @@ class LowLevelSkeleton(object):
             return lir.StoreCell(hir_code.A, hir_code.B)
         if isa(hir.BuildClosure):
             return lir.BuildClosure(hir_code.A, hir_code.B)
-        if isa(hir.Call) or isa(hir.TailCall):
+        if isa(hir.Call):
             return lir.Call(hir_code.A, hir_code.B, hir_code.C)
+        if isa(hir.TailCall):
+            return lir.TailCall(hir_code.A, hir_code.B, hir_code.C)
         if isa(hir.Return):
             return lir.Return(hir_code.B)
         if isa(hir.Label):

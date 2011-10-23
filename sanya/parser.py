@@ -19,6 +19,9 @@ def make_quote(sexpr):
 
 class MyParser(PackratParser):
     r"""
+    IGNORE:
+        ` |\n|\t|;[^\n]*`;
+
     BOOLEAN:
         c = `#(t|f)`
         IGNORE*
@@ -30,12 +33,9 @@ class MyParser(PackratParser):
         return {W_Fixnum(int(c))};
 
     SYMBOL:
-        c = `[\+\*\^\?a-zA-Z!<=>_~/$%&:][\+\-\*\^\?a-zA-Z0-9!<=>_~/$%&:]*`
+        c = `[\+\-\*\^\?a-zA-Z!<=>_~/$%&:][\+\-\*\^\?a-zA-Z0-9!<=>_~/$%&:]*`
         IGNORE*
         return {make_symbol(c)};
-
-    IGNORE:
-        ` |\n|\t|;[^\n]`;
 
     EOF:
         !__any__;
