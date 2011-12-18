@@ -1,6 +1,6 @@
 """ How closures are build and called?
 """
-from pypy.rlib.jit import purefunction
+from pypy.rlib.jit import unroll_safe
 from sanya.objectmodel import W_Root
 
 # XXX: consider unify this with vm.Dump and vm.Frame?
@@ -32,7 +32,7 @@ class W_Skeleton(W_Root):
             skeleton_registry ; list of skeletons, @see Lua's KPROTO
     """
     _immutable_fields_ = ['codes', 'consts', 'frame_size', 'cell_recipt',
-            'fresh_cells', 'nb_args', 'varargs_p']
+                          'fresh_cells', 'nb_args', 'varargs_p']
 
     def __init__(self, codes, consts, frame_size, cell_recipt,
             fresh_cells, nb_args, varargs_p, skeleton_registry):
@@ -50,6 +50,7 @@ class W_Skeleton(W_Root):
     def is_procedure_skeleton(self):
         return True
 
+    @unroll_safe
     def build_closure(self, vm):
         cellvalues = [None] * len(self.cell_recipt)
         for i, packed_data in enumerate(self.cell_recipt):
@@ -89,19 +90,12 @@ class W_Closure(W_Root):
         @see W_Skeleton
         @see instruction_set.BuildClosure
     """
-    _immutable_fields_ = ['skeleton', 'cellvalues'] # why not?
+    __slots__ = ['skeleton', 'cellvalues']
+    _immutable_ = True
 
     def __init__(self, skeleton, cellvalues):
         self.skeleton = skeleton
         self.cellvalues = cellvalues
-
-    @purefunction
-    def get_skeleton(self):
-        return self.skeleton
-
-    @purefunction
-    def get_cellvalues(self):
-        return self.cellvalues
 
     def is_procedure(self):
         return True
@@ -149,18 +143,18 @@ class W_CellValue(W_Root):
         if self.escaped:
             return self.escaped_value
         else:
-            return self.baseframe.get(self.slotindex)
+            return self.baseframe[self.slotindex]
 
     def setvalue(self, value):
         if self.escaped:
             self.escaped_value = value
         else:
-            self.baseframe.set(self.slotindex, value)
+            self.baseframe[self.slotindex] = value
 
     def try_escape(self, frame):
         if self.baseframe is frame:
             self.escaped = True
-            self.escaped_value = self.baseframe.get(self.slotindex)
+            self.escaped_value = self.baseframe[self.slotindex]
             self.baseframe = None
             self.slotindex = -1
             return True

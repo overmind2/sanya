@@ -1,8 +1,10 @@
-from pypy.rlib.jit import purefunction
+from pypy.rlib.jit import unroll_safe
+from pypy.rlib.objectmodel import UnboxedValue
 
 class W_Root(object):
     """ Base class for all application-level objects.
     """
+    __slots__ = []
     def __init__(self):
         pass
 
@@ -85,6 +87,7 @@ class W_Symbol(W_Root):
         should use make_symbol(str) to get a w_symbol with the given str.
     """
     symtab = {}
+    __slots__ = ['sval']
     _immutable_fields_ = ['sval']
 
     def __init__(self, sval):
@@ -93,11 +96,9 @@ class W_Symbol(W_Root):
     def is_symbol(self):
         return True
 
-    @purefunction
     def get_symbol(self):
         return self.sval
 
-    @purefunction
     def to_string(self):
         return self.sval
 
@@ -117,22 +118,18 @@ def make_symbol(sval):
         W_Symbol.symtab[sval] = got
     return got
 
-class W_Fixnum(W_Root):
+class W_Fixnum(W_Root, UnboxedValue):
     """ Generally a machine word.
     """
     _immutable_fields_ = ['ival']
-
-    def __init__(self, ival):
-        self.ival = ival
+    __slots__ = ['ival']
 
     def is_fixnum(self):
         return True
 
-    @purefunction
     def get_fixnum(self):
         return self.ival
 
-    @purefunction
     def to_string(self):
         return str(self.ival)
 
@@ -148,6 +145,7 @@ class W_Pair(W_Root):
         However since we are compiling to bytecode, pairs become
         not so important in the runtime.
     """
+    __slots__ = ['car', 'cdr']
     def __init__(self, car, cdr):
         self.car = car
         self.cdr = cdr
@@ -235,6 +233,7 @@ def scmlist2py(w_list, output):
         will be w_nil.
     """
     while w_list.is_pair():
+        assert isinstance(w_list, W_Pair)
         output.append(w_list.car)
         w_list = w_list.cdr
     return w_list
@@ -289,6 +288,7 @@ class W_PyProc(W_Root):
     def is_pyproc(self):
         return True
 
+    @unroll_safe
     def py_call(self, py_args):
         raise NotImplementedError
 

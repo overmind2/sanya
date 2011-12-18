@@ -2,6 +2,7 @@
     Calling functions here may be a bottleneck but what to do?
 """
 import os
+from pypy.rlib.jit import unroll_safe
 from sanya.objectmodel import *
 
 def open_lib(vm):
@@ -11,6 +12,7 @@ def open_lib(vm):
 class W_AddProc(W_PyProc):
     _symbol_name_ = '+'
 
+    @unroll_safe
     def py_call(self, py_args):
         res = W_Fixnum(0)
         for w_obj in py_args:
@@ -24,6 +26,7 @@ class W_AddProc(W_PyProc):
 class W_SubtractProc(W_PyProc):
     _symbol_name_ = '-'
 
+    @unroll_safe
     def py_call(self, py_args):
         assert len(py_args) >= 1
 
@@ -40,6 +43,7 @@ class W_SubtractProc(W_PyProc):
 class W_DisplayProc(W_PyProc):
     _symbol_name_ = 'display'
 
+    @unroll_safe
     def py_call(self, py_args):
         assert len(py_args) == 1
         os.write(1, py_args[0].to_string())
@@ -51,6 +55,7 @@ class W_DisplayProc(W_PyProc):
 class W_NewlineProc(W_PyProc):
     _symbol_name_ = 'newline'
 
+    @unroll_safe
     def py_call(self, py_args):
         assert len(py_args) == 0
         os.write(1, '\n')
@@ -62,6 +67,7 @@ class W_NewlineProc(W_PyProc):
 class W_LessThanProc(W_PyProc):
     _symbol_name_ = '<'
 
+    @unroll_safe
     def py_call(self, py_args):
         assert len(py_args) == 2
         lhs = py_args[0]
@@ -75,6 +81,7 @@ class W_LessThanProc(W_PyProc):
 class W_Cons(W_PyProc):
     _symbol_name_ = 'cons'
 
+    @unroll_safe
     def py_call(self, py_args):
         assert len(py_args) == 2
         lhs = py_args[0]
@@ -87,10 +94,11 @@ class W_Cons(W_PyProc):
 class W_Car(W_PyProc):
     _symbol_name_ = 'car'
 
+    @unroll_safe
     def py_call(self, py_args):
         assert len(py_args) == 1
         w_pair = py_args[0]
-        assert w_pair.is_pair()
+        assert isinstance(w_pair, W_Pair)
         return w_pair.car
 
     def to_string(self):
@@ -99,10 +107,11 @@ class W_Car(W_PyProc):
 class W_Cdr(W_PyProc):
     _symbol_name_ = 'cdr'
 
+    @unroll_safe
     def py_call(self, py_args):
         assert len(py_args) == 1
         w_pair = py_args[0]
-        assert w_pair.is_pair()
+        assert isinstance(w_pair, W_Pair)
         return w_pair.cdr
 
     def to_string(self):

@@ -12,8 +12,9 @@
     In the future it may also capture its current globalvars (to make
     python-like modules).
 """
+from pypy.rlib.jit import unroll_safe
 from sanya.objectmodel import w_nil, pylist2scm
-from sanya.closure import W_CellValue
+from sanya.closure import W_CellValue, W_Closure
 
 # define the instruction type. This is used in assembling.
 OP_TYPE_DUMMY = 0
@@ -31,6 +32,7 @@ class Instr(object):
         self.C = 0
         self.Bx = 0
 
+    @unroll_safe
     def dispatch(self, vm):
         raise NotImplementedError
 
@@ -78,7 +80,7 @@ class MoveLocal(Instr):
         self.Bx = 0
 
     def dispatch(self, vm):
-        vm.frame.set(self.A, vm.frame.get(self.B))
+        vm.frame[self.A] = vm.frame[self.B]
 
     def __repr__(self):
         return '[r(%d) = r(%d)]' % (self.A, self.B)
@@ -95,7 +97,7 @@ class LoadGlobal(Instr):
         self.Bx = 0
 
     def dispatch(self, vm):
-        vm.frame.set(self.A, vm.globalvars[vm.consts[self.B]])
+        vm.frame[self.A] =  vm.globalvars[vm.consts[self.B]]
 
     def __repr__(self):
         return '[r(%d) = g(k(%d))]' % (self.A, self.B)
@@ -112,7 +114,7 @@ class LoadCell(Instr):
         self.Bx = 0
 
     def dispatch(self, vm):
-        vm.frame.set(self.A, vm.cellvalues[self.B].getvalue())
+        vm.frame[self.A] = vm.cellvalues[self.B].getvalue()
 
     def __repr__(self):
         return '[r(%d) = c(%d).get]' % (self.A, self.B)
@@ -129,7 +131,7 @@ class LoadConst(Instr):
         self.Bx = 0
 
     def dispatch(self, vm):
-        vm.frame.set(self.A, vm.consts[self.B])
+        vm.frame[self.A] = vm.consts[self.B]
 
     def __repr__(self):
         return '[r(%d) = k(%d)]' % (self.A, self.B)
@@ -146,7 +148,7 @@ class StoreGlobal(Instr):
         self.Bx = 0
     
     def dispatch(self, vm):
-        vm.globalvars[vm.consts[self.A]] = vm.frame.get(self.B)
+        vm.globalvars[vm.consts[self.A]] = vm.frame[self.B]
 
     def __repr__(self):
         return '[g(k(%d)) = r(%d)]' % (self.A, self.B)
@@ -163,7 +165,7 @@ class StoreCell(Instr):
         self.Bx = 0
     
     def dispatch(self, vm):
-        vm.cellvalues[self.A].setvalue(vm.frame.get(self.B))
+        vm.cellvalues[self.A].setvalue(vm.frame[self.B])
 
     def __repr__(self):
         return '[c(%d).set(r(%d))]' % (self.A, self.B)
@@ -190,7 +192,7 @@ class BuildClosure(Instr):
         w_skel = vm.skeleton_registry[self.B]
         assert w_skel.is_procedure_skeleton()
         w_proc = w_skel.build_closure(vm)
-        vm.frame.set(self.A, w_proc)
+        vm.frame[self.A] = w_proc
 
     def __repr__(self):
         return '[r(%d) = buildclosure(CloskelT[%d])]' % (self.A, self.B)
@@ -214,6 +216,7 @@ class Call(Instr):
         self.C = C
         self.Bx = 0
 
+    @unroll_safe
     def dispatch(self, vm):
         dest_reg = self.A
         proc_reg = self.B
@@ -221,26 +224,25 @@ class Call(Instr):
         actual_argcount = self.C
 
         # make sure its a procedure and we have enough args
-        w_proc = vm.frame.get(proc_reg)
+        w_proc = vm.frame[proc_reg]
 
         if w_proc.is_pyproc():
-            py_args = [vm.frame.get(index_of_first_arg + i)
-                for i in xrange(actual_argcount)]
+            py_args = [vm.frame[index_of_first_arg + i]
+                       for i in xrange(actual_argcount)]
             w_result = w_proc.py_call(py_args) # Call it!
-            vm.frame.set(dest_reg, w_result)
+            vm.frame[dest_reg] = w_result
             return
 
-        assert w_proc.is_procedure()
-        w_skel = w_proc.get_skeleton()
+        assert isinstance(w_proc, W_Closure)
+        w_skel = w_proc.skeleton
         assert w_skel.nb_args <= actual_argcount
 
         # handle varargs.
         if w_skel.nb_args < actual_argcount:
             assert(w_skel.varargs_p)
             # vararg is slowish.
-            vararg = pylist2scm([
-                vm.frame.get(index_of_first_arg + i)
-                for i in xrange(actual_argcount)])
+            vararg = pylist2scm([vm.frame[index_of_first_arg + i]
+                                 for i in xrange(actual_argcount)])
         else:
             vararg = w_nil
 
@@ -251,7 +253,7 @@ class Call(Instr):
         old_frame = vm.frame
         vm.frame = vm.new_frame(w_skel.frame_size)
         vm.consts = w_skel.consts
-        vm.cellvalues = w_proc.get_cellvalues()
+        vm.cellvalues = w_proc.cellvalues
         # loading cellvalues from frame to shadow cellvalue frame.
         vm.fresh_cells = shad_frame = [None] * len(w_skel.fresh_cells)
         for i, frameindex in enumerate(w_skel.fresh_cells):
@@ -267,9 +269,9 @@ class Call(Instr):
         # copying overhead could be avoided. But does it worth?
         # Anyway we can take a profile first.
         for i in xrange(w_skel.nb_args):
-            vm.frame.set(i, old_frame.get(i + index_of_first_arg))
+            vm.frame[i] = old_frame[i + index_of_first_arg]
         if w_skel.varargs_p:
-            vm.frame.set(w_skel.nb_args, vararg)
+            vm.frame[w_skel.nb_args] = vararg
 
     def __repr__(self):
         if self.C == 0:
@@ -302,6 +304,7 @@ class TailCall(Instr):
         self.C = C
         self.Bx = 0
 
+    @unroll_safe
     def dispatch(self, vm):
         dest_reg = self.A
         proc_reg = self.B
@@ -309,17 +312,17 @@ class TailCall(Instr):
         actual_argcount = self.C
 
         # make sure its a procedure and we have enough args
-        w_proc = vm.frame.get(proc_reg)
+        w_proc = vm.frame[proc_reg]
 
         if w_proc.is_pyproc():
-            py_args = [vm.frame.get(index_of_first_arg + i)
-                for i in xrange(actual_argcount)]
+            py_args = [vm.frame[index_of_first_arg + i]
+                       for i in xrange(actual_argcount)]
             w_result = w_proc.py_call(py_args) # Call it!
-            vm.frame.set(dest_reg, w_result)
+            vm.frame[dest_reg] = w_result
             return
 
-        assert w_proc.is_procedure()
-        w_skel = w_proc.get_skeleton()
+        assert isinstance(w_proc, W_Closure)
+        w_skel = w_proc.skeleton
         assert w_skel.nb_args <= actual_argcount
 
         # handle varargs.
@@ -327,9 +330,8 @@ class TailCall(Instr):
             assert(w_skel.varargs_p)
             # vararg is slowish.
             # XXX: scmlist_to_pylist here
-            vararg = pylist2scm([
-                vm.frame.get(index_of_first_arg + i)
-                for i in xrange(actual_argcount)])
+            vararg = pylist2scm([vm.frame[index_of_first_arg + i]
+                                 for i in xrange(actual_argcount)])
         else:
             vararg = None # make pypy happy
 
@@ -341,7 +343,7 @@ class TailCall(Instr):
         old_frame = vm.frame
         vm.frame = vm.new_frame(w_skel.frame_size)
         vm.consts = w_skel.consts
-        vm.cellvalues = w_proc.get_cellvalues()
+        vm.cellvalues = w_proc.cellvalues
 
         # loading cellvalues from frame to shadow cellvalue frame.
         vm.fresh_cells = shad_frame = [None] * len(w_skel.fresh_cells)
@@ -358,9 +360,9 @@ class TailCall(Instr):
         # copying overhead could be avoided. But does it worth?
         # Anyway we can take a profile first.
         for i in xrange(w_skel.nb_args):
-            vm.frame.set(i, old_frame.get(i + index_of_first_arg))
+            vm.frame[i] = old_frame[i + index_of_first_arg]
         if w_skel.varargs_p:
-            vm.frame.set(w_skel.nb_args, vararg)
+            vm.frame[w_skel.nb_args] = vararg
 
     def __repr__(self):
         if self.C == 0:
@@ -398,7 +400,7 @@ class Return(Instr):
             # some how the dest reg for return value is restored.
             vm.frame[dest_reg] = return_value
         """
-        return_value = vm.frame.get(self.B)
+        return_value = vm.frame[self.B]
         vm.restore_dump(return_value)
 
     def __repr__(self):
@@ -435,7 +437,7 @@ class BranchIfFalse(Instr):
         self.C = 0
 
     def dispatch(self, vm):
-        if not vm.frame.get(self.A).to_bool():
+        if not vm.frame[self.A].to_bool():
             vm.pc += self.Bx
 
     def __repr__(self):

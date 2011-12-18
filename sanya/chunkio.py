@@ -2,7 +2,7 @@
 from sanya.instruction_set import make_instr
 from sanya.closure import W_Skeleton
 from sanya.objectmodel import (make_symbol, W_Fixnum,
-        W_Pair, make_bool, w_unspecified, w_nil)
+                               W_Pair, make_bool, w_unspecified, w_nil)
 
 CHUNK_HEADER = '-' + 'sanya' + '--'
 
@@ -77,6 +77,7 @@ def dump_const(const, stream):
 
     elif const.is_pair():
         # XXX: recursive call -- stack overflow?
+        assert isinstance(const, W_Pair)
         stream.write(K_PAIR)
         dump_const(const.car, stream)
         dump_const(const.cdr, stream)

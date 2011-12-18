@@ -1,46 +1,16 @@
-from pypy.rlib.jit import JitDriver, hint
+from pypy.rlib.jit import hint, unroll_safe
 from sanya.closure import W_CellValue, CellValueNode
 from sanya.config import DEBUG
+from sanya.jit import jitdriver
 
-# make jit
-jitdriver = JitDriver(greens=['pc', 'instr'], reds=['vm', 'frame'])
 
 class HaltException(Exception):
     """ Raise this and VM will stop running.
     """
     pass
 
-class Frame(object):
-    """ Could make the stack frame a continuous space so that function calls
-        can be cheaper -- no need to copy args between frames.
-        However since in most of the situations we are doing tail-calls
-        which will not benefit from this...
-    """
-    def __init__(self, size):
-        # Wondering why this hint is not giving any speed improvement...
-        self = hint(self, access_directly=True, fresh_virtualizable=True)
-        self.items = [None] * size
-
-    def __repr__(self):
-        return '<frame %r>' % self.items
-
-    def resize(self, new_size):
-        if len(self.items) < new_size:
-            self.items += [None] * (new_size - self.size())
-
-    def size(self):
-        return len(self.items)
-
-    def get(self, index):
-        assert index >= 0
-        return self.items[index]
-
-    def set(self, index, value):
-        assert index >= 0
-        self.items[index] = value
-
-
 class Dump(object):
+    _immutable_ = True
     def __init__(self, vm):
         self.frame = vm.frame
         self.consts = vm.consts
@@ -63,7 +33,13 @@ class Dump(object):
 
 
 class VM(object):
+    _immutable_fields_ = ['globalvars']
+    _virtualizable2_ = ['frame', 'consts', 'cellvalues', 'fresh_cells',
+                        'codes', 'pc', 'return_addr', 'dump',
+                        'cellval_head', 'skeleton_registry']
     def __init__(self):
+        self = hint(self, promote=True, access_directly=True,
+                    fresh_virtualizable=True)
         self.reboot()
 
     def reboot(self):
@@ -88,14 +64,16 @@ class VM(object):
         self.skeleton_registry = []
 
     def new_frame(self, size):
-        return Frame(size)
+        return [None] * size
 
     def bootstrap(self, w_skel):
         assert w_skel.is_procedure_skeleton()
+        newsize = w_skel.frame_size
         if self.frame is None:
-            self.frame = self.new_frame(w_skel.frame_size)
+            self.frame = self.new_frame(newsize)
         else:
-            self.frame.resize(w_skel.frame_size)
+            if len(self.frame) < newsize:
+                self.frame.extend([None] * (newsize - len(self.frame)))
         self.pc = 0
         self.consts = w_skel.consts
         self.codes = w_skel.codes
@@ -118,11 +96,12 @@ class VM(object):
         if self.dump is not None:
             return_addr = self.return_addr
             self.dump.restore(self)
-            self.frame.set(return_addr, return_value)
+            self.frame[return_addr] = return_value
         else: # top-level return
             self.exit_value = return_value
             self.halt()
 
+    @unroll_safe
     def escape_cellvalues(self):
         frame = self.frame
         dummy_node = self.cellval_head
@@ -135,19 +114,16 @@ class VM(object):
             else:
                 iter_node = iter_node.nextnode
 
+    @unroll_safe
     def run(self):
+        self = hint(self, promote=True, access_directly=True)
         try:
             while True:
+                jitdriver.jit_merge_point(pc=self.pc, codes=self.codes,
+                                          vm=self)
                 instr = self.codes[self.pc]
-
-                jitdriver.jit_merge_point(pc=self.pc,
-                        instr=instr,
-                        vm=self,
-                        frame=self.frame)
-
                 if DEBUG:
                     print self
-
                 self.pc += 1
                 instr.dispatch(self)
         except HaltException:
